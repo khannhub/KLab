@@ -1,0 +1,33 @@
+---
+description: "Playbook: expose a service safely (prefer gateway/tunnel; minimize host ports)"
+alwaysApply: false
+---
+
+## Default stance
+
+Assume the service could become internet-reachable. Prefer **intra-docker exposure** via `services` + a gateway/tunnel stack.
+
+## Preferred patterns (in order)
+
+1. **Expose via `cloudflared`**
+   - Put the app on the external `services` network.
+   - Use a Cloudflare Tunnel Public Hostname targeting `http://<service>:<port>` on the Docker network.
+   - Add Cloudflare Access policies (MFA/IdP allowlists) for anything user-facing.
+
+2. **Expose via `zoraxy` (reverse proxy)**
+   - Put the app on `services`.
+   - Configure routing in Zoraxy to the upstream container name + port.
+
+## If you must publish a host port
+
+- Make it env-configurable.
+- Prefer binding to loopback for local-only access: `127.0.0.1:${PORT:-1234}:1234`
+- Document the exposure in the stack README:
+  - why it exists
+  - how to restrict access
+  - whether it is intended only for bootstrap/testing
+
+## Never do
+
+- Do not publish a port “just because it’s convenient” for services intended to be behind a gateway.
+- Do not introduce new host-exposed admin UIs without an auth layer and explicit documentation.

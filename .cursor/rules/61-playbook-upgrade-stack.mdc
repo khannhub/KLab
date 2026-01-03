@@ -1,0 +1,35 @@
+---
+description: "Playbook: upgrade a stack safely (image bumps, config changes, migrations)"
+alwaysApply: false
+---
+
+## When to use
+
+Use this playbook when asked to upgrade an existing stack (image tag bumps, configuration changes, or service additions/removals).
+
+## Checklist
+
+1. **Identify what changes**
+   - image/tag changes
+   - env var additions/removals
+   - volume schema/migrations
+   - network exposure changes (ports, networks)
+
+2. **Prefer safe versioning**
+   - Prefer bumping **explicit tags** (or digests) rather than switching to `latest`.
+   - Keep overrides env-configurable.
+
+3. **Update docs in the same PR**
+   - If you change access method, ports, or required env vars, update `stacks/<stack>/README.md`.
+
+4. **Validate config (no secrets)**
+   - `make config <stack>` (or `bash scripts/stack.sh config <stack>`) should succeed.
+   - If required vars are introduced, use `${VAR:?message}` so failures are explicit.
+
+5. **Deploy approach**
+   - Prefer `make update <stack>` (pull + up -d --remove-orphans) via `scripts/stack.sh`.
+   - Avoid changes that implicitly delete volumes.
+
+6. **Rollback plan**
+   - Document how to revert (previous tag, previous env vars).
+   - If migrations are irreversible, call it out clearly.

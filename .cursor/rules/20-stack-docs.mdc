@@ -1,0 +1,64 @@
+---
+description: "Stack docs (README.md): required sections, security notes, and keeping references in sync"
+globs:
+  - "README.md"
+  - "stacks/README.md"
+  - "stacks/**/README.md"
+  - "docker/**"
+alwaysApply: false
+---
+
+## Goal
+
+Stack READMEs are operational runbooks. They should enable a future-you (or teammate) to deploy, access, and safely operate the stack without hunting through compose files.
+
+## Non-negotiables
+
+- **Never include secrets** (tokens, passwords, tunnel credentials). Use `.env` (gitignored) and document variables in `.env.example` with placeholders.
+- **Assume internet reachability**. If the stack could be exposed, include security notes and prefer gateway/tunnel exposure over host port publishing.
+- **Keep paths consistent** with the repo’s current stack root (`stacks/`).
+
+## Recommended README structure (per stack)
+
+- **What it is**
+  - 1–3 sentences describing purpose and major components/images.
+- **Deploy**
+  - Prereqs (networks, dependent stacks).
+  - Commands using repo entrypoints (prefer `make`):
+    - `make net services` (if needed)
+    - `make init <stack>` (if env needed)
+    - `make up <stack>`
+- **Access**
+  - How to reach it (URL, port), *and whether it is intentionally not host-exposed*.
+  - If access is via gateway/tunnel, show the intra-docker URL (e.g. `http://service:port` on `services`).
+- **Configuration**
+  - List key env vars (and where they live: `.env` / `.env.example`).
+  - Mark required secrets explicitly.
+- **Networking**
+  - Which Docker networks the stack joins (`services`, internal network, `portainer`, etc.).
+  - If any host ports are published, explain why and how to restrict exposure.
+- **Persistence**
+  - Named volumes and what they store.
+  - Any host bind mounts (and why).
+- **Security notes**
+  - Authn/authz expectations (e.g. “protect behind Cloudflare Access”).
+  - Any elevated caps/devices (e.g. TUN/`NET_ADMIN`) and why.
+- **Upgrades**
+  - What to bump (image tag/env var), how to redeploy (`make update <stack>`), and any migration notes.
+- **Troubleshooting (optional)**
+  - Common failure modes and how to validate (logs/healthcheck endpoints).
+
+## Keep docs + automation in sync
+
+If you change:
+
+- stack names
+- stack root paths
+- required networks
+- published ports
+
+…then also update:
+
+- `README.md` and `stacks/README.md`
+- `scripts/stack.sh` (path detection / validation)
+- workflows (`.github/workflows/*`)

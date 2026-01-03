@@ -1,0 +1,38 @@
+---
+description: "Playbook: migrate stack root paths (docker/stacks ↔ stacks) without breaking CI/deploy"
+alwaysApply: false
+---
+
+## When to use
+
+Use this when asked to rename/move stack roots or resolve drift between `docker/stacks/` and `stacks/`.
+
+## Safety rules
+
+- Do **not** create/keep two parallel stack trees unless it is an explicit migration step with a short deprecation window.
+- Prefer making automation **detect the root** first (supports both), then migrate docs/workflows.
+
+## Migration sequence (recommended)
+
+1. **Update the source of truth**
+   - Update `scripts/stack.sh` to detect stack root:
+     1) use `stacks/` if it exists, else
+     2) use `docker/stacks/` if it exists (legacy)
+   - Ensure `bash scripts/stack.sh list/validate/up/update` works after the change.
+
+2. **Update the human entrypoint**
+   - Update `Makefile` help text and any path mentions.
+
+3. **Update CI**
+   - Update workflow `paths:` filters and any references to stack paths:
+     - `.github/workflows/validate-compose.yml`
+     - `.github/workflows/portainer-gitops-webhook.yml`
+     - `.github/workflows/deploy.yml` (remote command stays `scripts/stack.sh`)
+
+4. **Update docs**
+   - `README.md`, `stacks/README.md`, per-stack READMEs.
+   - Ensure examples reference the canonical root.
+
+5. **Cleanup**
+   - Only after everything points to the canonical root, remove the old tree.
+   - Document the change + rollback steps.

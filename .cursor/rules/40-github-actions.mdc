@@ -1,0 +1,45 @@
+---
+description: "GitHub Actions: security, reproducibility, and stack-safe deployments"
+globs:
+  - ".github/workflows/**/*.yml"
+  - ".github/workflows/**/*.yaml"
+  - ".github/dependabot.yml"
+alwaysApply: false
+---
+
+## Security baseline
+
+- Use **least privilege** permissions (default `contents: read` unless a job needs more).
+- Never echo secrets. Avoid `set -x`.
+- Prefer strict bash in `run:` blocks: `set -euo pipefail`.
+- Validate user inputs (stack name, refs) before use; use an allowlist regex.
+
+## Reproducibility
+
+- Pin actions by version (already done in this repo for common actions).
+- Use `concurrency` to avoid overlapping deploys for the same stack/ref.
+
+## Stack path drift (important)
+
+This repo’s canonical stack root is `stacks/` (legacy path: `docker/stacks/`).
+
+- When editing workflow `paths:` filters or scripts referencing stack paths, do not hardcode legacy paths.
+- Prefer using the repo entrypoints (`bash scripts/stack.sh …`) instead of re-implementing stack detection in YAML.
+
+## Deploy workflow expectations (SSH)
+
+If modifying `.github/workflows/deploy.yml`:
+
+- Keep the remote deploy sequence safe and deterministic:
+  - checkout on remote via `git fetch` + `git reset --hard <sha>`
+  - run `bash scripts/stack.sh update <stack>`
+- Keep `StrictHostKeyChecking=yes` and use `known_hosts`.
+- Keep stack name validation in place (avoid command injection via inputs).
+
+## Portainer webhook workflow expectations
+
+If modifying `.github/workflows/portainer-gitops-webhook.yml`:
+
+- Treat `PORTAINER_WEBHOOKS` as sensitive; never print the URLs.
+- Ensure “no-op” behavior when the secret is not configured.
+- Only trigger on stack compose changes (paths filter).
