@@ -1,0 +1,9 @@
+# KLab Cursor rules
+#
+# This repo uses Cursor Project Rules in `.cursor/rules/*.mdc`.
+# If you are seeing this file, it’s only a compatibility shim for older Cursor
+# setups. The real, scoped rules live in `.cursor/rules/`.
+#
+# - Global guardrails: `.cursor/rules/00-guardrails.mdc`
+# - File-scoped rules auto-attach based on globs (compose, docs, scripts, workflows)
+# - Task playbooks are agent-requested rules (new stack, upgrades, exposure, migrations)

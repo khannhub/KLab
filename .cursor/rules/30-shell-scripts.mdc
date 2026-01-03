@@ -1,0 +1,46 @@
+---
+description: "Shell automation (scripts/*.sh): safety, portability, and repo conventions"
+globs:
+  - "scripts/**/*.sh"
+alwaysApply: false
+---
+
+## Baseline
+
+- Use bash strict mode at the top of scripts: `set -euo pipefail`
+- Prefer small, testable functions; keep side effects localized.
+- Quote variables and paths. Assume spaces/special chars.
+
+## Input validation (required)
+
+- Validate user-provided inputs (stack names, paths, URLs) before use.
+- Fail fast with helpful error messages (`die` helper is fine).
+- Never accept arbitrary strings into `eval` or unquoted shell execution.
+
+## Safety
+
+- Avoid destructive actions by default (`rm -rf`, volume pruning, deleting named volumes).
+- If a destructive action is necessary:
+  - require an explicit opt-in flag (e.g. `--force`)
+  - document it in usage/help output
+  - echo exactly what will be deleted
+
+## Stack root drift (important in this repo)
+
+When referencing stack directories, do **not** assume a single root.
+Use this rule:
+
+1. If `stacks/` exists, treat it as the stack root.
+2. Else if `docker/stacks/` exists, treat it as the stack root (legacy).
+3. Do not create a second parallel tree unless it’s an explicit migration (update docs + workflows together).
+
+## Docker/Compose usage
+
+- Prefer `docker compose` (plugin) and check availability before running.
+- For “config/validate” flows, allow a safe fallback env file (`.env.example`) when `.env` doesn’t exist.
+- Avoid printing environment variables that may contain secrets.
+
+## UX
+
+- Provide a clear `usage` output with examples.
+- Make error messages actionable (what file/var is missing, next command to run).

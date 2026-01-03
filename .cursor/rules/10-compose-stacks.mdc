@@ -1,0 +1,88 @@
+---
+description: "Compose stacks: authoring conventions, security baseline, and operational safety"
+globs:
+  - "stacks/**/docker-compose.yaml"
+  - "stacks/**/docker-compose.yml"
+alwaysApply: false
+---
+
+## Goal
+
+When editing a stack compose file, optimize for:
+
+- **Least privilege** (default deny; add only what’s needed)
+- **Reproducible deployments** (config in repo, secrets in `.env`)
+- **Safe exposure** (assume internet reachability; prefer internal exposure + gateway)
+- **Boring operations** (predictable names, healthchecks, log rotation)
+
+## Stack-level conventions
+
+- **Set a stable project name** using top-level `name: <stack>` (already used in this repo).
+- **Use env-var defaults** so the compose file is safe to commit:
+  - Optional: `${VAR:-default}`
+  - Required secret: `${VAR:?set VAR in .env}`
+- **Prefer deterministic images**:
+  - Prefer versioned tags (or digests) for production.
+  - If using `:latest`, allow overriding via env and document why in a comment.
+
+## Service baseline (apply unless incompatible)
+
+For each service:
+
+- **Init + restart**
+  - Prefer `init: true`
+  - Prefer `restart: always` (or `unless-stopped` for user-facing apps)
+- **Identity**
+  - Use `hostname:` and `container_name:` consistently (this repo does).
+- **Security**
+  - Always add:
+    - `security_opt: ["no-new-privileges:true"]`
+  - Prefer:
+    - `cap_drop: ["ALL"]`
+    - `read_only: true` plus `tmpfs: ["/tmp", "/run"]` when the app supports it (see `stacks/cloudflared/docker-compose.yaml` pattern).
+  - Avoid:
+    - `privileged: true`
+    - `network_mode: host`
+    - mounting `/var/run/docker.sock` directly into app containers (use socket-proxy).
+- **Logging**
+  - Use the `json-file` driver with rotation:
+    - `max-size` and `max-file` should be env-configurable.
+- **Healthchecks**
+  - Add a healthcheck when practical.
+  - Prefer checks that don’t require extra packages (e.g., `wget --spider`, `nc`, language stdlib).
+  - Use env-configurable timing (`retries/timeout/interval/start_period`).
+
+## Networking rules (this repo’s model)
+
+- **Default**: do **not** publish ports to the host.
+  - Prefer `expose:` for intra-docker visibility.
+  - Put services that must be reached by other stacks on the external `services` network.
+- **External shared network**
+  - Join external `services` like:
+    - `networks: [services]`
+    - `networks.services.external: true`
+    - `networks.services.name: ${SERVICES_NETWORK_NAME:-services}`
+- **Internal stack network**
+  - For sensitive east-west traffic, define a stack-internal network:
+    - `internal: true`
+  - If you add/modify IPAM subnets:
+    - Treat it as a breaking infra change.
+    - Ensure no collisions with other stacks / the host LAN.
+    - Update the relevant docs (`stacks/README.md`) and any automation that assumes defaults (`scripts/stack.sh`) if applicable.
+
+## Port publishing (only when explicitly needed)
+
+If you must publish a port:
+
+- Make the host port env-configurable: `"${FOO_HOST_PORT:-1234}:1234"`
+- Prefer binding to loopback for “local-only” access: `"127.0.0.1:${FOO_HOST_PORT:-1234}:1234"`
+- Document the exposure in the stack `README.md` (access + security notes).
+
+## Docker access: socket-proxy pattern
+
+If a stack needs to talk to Docker:
+
+- Add a dedicated **docker-socket-proxy** service.
+- Put the proxy on an internal network only.
+- Allowlist only the API sections required (principle of least privilege).
+- Point the app at the proxy via `DOCKER_HOST=tcp://<proxy>:2375` (see `stacks/zoraxy` and `stacks/authentik` patterns).

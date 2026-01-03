@@ -1,0 +1,50 @@
+---
+description: "Playbook: add a new stack (end-to-end, production-grade)"
+alwaysApply: false
+---
+
+## When to use
+
+Use this playbook when asked to **create a new stack** or bootstrap a service into this repo as a new stack directory.
+
+## Steps (do these in order)
+
+1. **Pick a stack name**
+   - Lowercase, `^[a-z0-9][a-z0-9_-]*$`
+   - Avoid renaming after deployment; stack name is the Compose project name.
+
+2. **Start from the template**
+   - Copy `stacks/_template` → `stacks/<stack>`
+   - Replace the demo service with real services/volumes/networks.
+
+3. **Compose file requirements**
+   - Use `name: <stack>`
+   - Default to **no host-published ports**
+   - Join external `services` network only if other stacks must reach it
+   - Apply the repo’s security baseline (`no-new-privileges`, `cap_drop`, log rotation, healthchecks).
+   - Secrets must come from `.env` via `${VAR:?message}` (never hardcode).
+
+4. **Env handling**
+   - Create `stacks/<stack>/.env.example` with:
+     - required vars (placeholders like `REPLACE_ME`)
+     - safe defaults for non-secret config
+   - Ensure `.env` remains gitignored.
+
+5. **Stack README**
+   - Add `stacks/<stack>/README.md` with:
+     - Deploy steps via `make`
+     - Access method (prefer gateway/tunnel, not direct host exposure)
+     - Networking + persistence + security notes
+     - Upgrade notes
+
+6. **Wire into stack index**
+   - Update `stacks/README.md` to list the new stack and any required shared networks.
+
+7. **CI/CD impacts**
+   - Ensure validation will pick up the new stack:
+     - `make validate` / `bash scripts/stack.sh validate`
+   - If workflows filter stack paths, update them as part of the change (avoid path drift).
+
+8. **Rollout notes**
+   - Document required one-time actions (network creation, DNS records, Cloudflare tunnel hostname, etc.).
+   - Include a rollback plan if the stack changes persistent state.

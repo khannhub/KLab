@@ -1,0 +1,54 @@
+---
+description: "KLab: repo map, stack lifecycle, and how deployments work"
+globs:
+  - "README.md"
+  - "stacks/README.md"
+  - "stacks/**/README.md"
+  - "docker/**"
+  - "scripts/**"
+  - "Makefile"
+  - ".github/workflows/**"
+  - ".github/dependabot.yml"
+alwaysApply: false
+---
+
+## Repo map (what matters)
+
+- **Stacks**: one folder per stack; each stack has a `docker-compose.yaml` and a `README.md`.
+  - Current on-disk layout in this repo is `stacks/<stack>/docker-compose.yaml`.
+  - Legacy layout (older versions) used `docker/stacks/<stack>`.
+- **Entry points**
+  - `Makefile`: the human-friendly interface (`make up <stack>`, `make update <stack>`, etc.).
+  - `scripts/stack.sh`: the single “source of truth” CLI that Make/CI/CD call.
+- **GitHub Actions**
+  - `.github/workflows/validate-compose.yml`: lints workflows/YAML/shell and runs `bash scripts/stack.sh validate`.
+  - `.github/workflows/deploy.yml`: manual SSH deploy that runs `bash scripts/stack.sh update <stack>` on the remote.
+  - `.github/workflows/portainer-gitops-webhook.yml`: optional Portainer GitOps webhook trigger based on stack compose changes.
+
+## How stacks are expected to work
+
+- **Per-stack env**
+  - `.env` is local/secret and must remain **gitignored**.
+  - `.env.example` is committed and documents required variables and safe defaults.
+- **Shared networking**
+  - There is an external Docker network named `services` used for inter-stack traffic.
+  - Stacks that need to be reachable by other stacks should join `services`.
+  - “Core” stacks may also define a stack-internal `internal: true` network for sensitive traffic.
+
+## Stack root detection (avoid path drift)
+
+When writing automation or docs, do **not** assume a single stack root exists.
+Use this decision rule:
+
+1. If `stacks/` exists, treat it as the stack root.
+2. Else if `docker/stacks/` exists, treat it as the stack root (legacy).
+3. Do not create a second parallel tree unless the change is an explicit migration (must update workflows + scripts + docs together).
+
+## Common operational flows (preferred)
+
+- **List stacks**: `make ls`
+- **Create shared network once**: `make net services`
+- **Initialize env**: `make init <stack>` (copies `.env.example` → `.env` if missing)
+- **Deploy**: `make up <stack>`
+- **Pull + redeploy**: `make update <stack>`
+- **Validate all stacks**: `make validate`

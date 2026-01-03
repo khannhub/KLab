@@ -1,0 +1,45 @@
+---
+description: "KLab: global guardrails (security, safety, repo intent)"
+globs: ["**/*"]
+alwaysApply: true
+---
+
+## Mission
+
+This repo is a **homelab / self-hosted** collection of **Docker Compose stacks** plus helper automation.
+Treat all changes as **production-grade infra changes**: prioritize safety, reproducibility, and least privilege.
+
+## Non‑negotiables (security + safety)
+
+- **Never commit secrets**
+
+  - Do **not** add real tokens/keys/passwords to any tracked file.
+  - Put host-specific or secret values in per-stack `.env` files (**gitignored**).
+  - Commit `.env.example` with **safe placeholders** and clear instructions (e.g. `REPLACE_ME`, `change-me`, `example.com`).
+  - If you need a required secret, use Compose required-var syntax (`${VAR:?message}`) rather than hardcoding.
+
+- **Assume everything might become internet-reachable**
+
+  - Default stance: **do not publish ports to the host** unless explicitly required.
+  - Prefer “intra-docker” exposure via the external `services` network, then expose through a gateway/tunnel stack.
+  - If a host port must be published, make it **configurable via env**, document it, and keep the exposed surface minimal.
+
+- **Least privilege by default**
+
+  - Prefer `security_opt: [no-new-privileges:true]` on all services.
+  - Prefer `cap_drop: [ALL]` unless a capability is clearly required.
+  - Prefer `read_only: true` + `tmpfs: [/tmp, /run]` for simple daemons (when compatible).
+  - Avoid mounting the Docker socket directly; prefer the **docker-socket-proxy** pattern.
+
+- **No destructive surprise**
+  - Don’t add automation that would destroy volumes or wipe data without an explicit opt-in flag and documentation.
+  - Keep migrations/renames explicit (document impact + rollback path).
+
+## Quality bar
+
+- **Make changes boring**: small diffs, predictable naming, consistent patterns across stacks.
+- **Keep repo-wide references in sync**: if you rename/move a path or concept, update:
+  - helper scripts (`scripts/stack.sh`)
+  - `Makefile`
+  - GitHub Actions workflows
+  - READMEs and in-file comments

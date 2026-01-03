@@ -1,0 +1,22 @@
+---
+description: "Makefile: command interface conventions and safety"
+globs:
+  - "Makefile"
+alwaysApply: false
+---
+
+## Purpose
+
+The `Makefile` is the human-friendly entrypoint that wraps `scripts/stack.sh` with a docker-compose-like interface.
+
+## Conventions
+
+- Keep the positional-arg interface stable:
+  - `make <cmd> <stack> [-- <args...>]`
+- Make targets should delegate to `bash scripts/stack.sh ...` rather than duplicating logic.
+- Keep `help` output up to date when adding/removing commands.
+- Avoid targets that implicitly destroy data (volumes) without an explicit, documented opt-in flag.
+
+## Path drift
+
+If you change stack root layout (e.g. migrate between `stacks/` and legacy `docker/stacks/`), update `scripts/stack.sh` first and keep Makefile help text consistent with reality.
