@@ -1,0 +1,12 @@
+.cursorignore
+.cursorindexingignore
+.DS_Store
+.AppleDouble
+.LSOverride
+.idea/
+.vscode/
+
+# Env files
+.env
+.env.*
+!.env.example
