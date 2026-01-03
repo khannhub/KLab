@@ -29,14 +29,15 @@ Stack READMEs are operational runbooks. They should enable a future-you (or team
     - `make init <stack>` (if env needed)
     - `make up <stack>`
 - **Access**
-  - How to reach it (URL, port), *and whether it is intentionally not host-exposed*.
+  - How to reach it (URL, port), _and whether it is intentionally not host-exposed_.
   - If access is via gateway/tunnel, show the intra-docker URL (e.g. `http://service:port` on `services`).
 - **Configuration**
   - List key env vars (and where they live: `.env` / `.env.example`).
   - Mark required secrets explicitly.
 - **Networking**
-  - Which Docker networks the stack joins (`services`, internal network, `portainer`, etc.).
+  - Which Docker networks the stack joins (`services`, internal network, etc.).
   - If any host ports are published, explain why and how to restrict exposure.
+  - Document if the stack intentionally does NOT publish ports (access via gateway/tunnel).
 - **Persistence**
   - Named volumes and what they store.
   - Any host bind mounts (and why).

@@ -22,8 +22,29 @@ When editing a stack compose file, optimize for:
   - Optional: `${VAR:-default}`
   - Required secret: `${VAR:?set VAR in .env}`
 - **Prefer deterministic images**:
-  - Prefer versioned tags (or digests) for production.
+  - Prefer versioned tags (or digests) for production (e.g., `:2025.10`, `:lts`).
   - If using `:latest`, allow overriding via env and document why in a comment.
+- **Volume naming**: Use named volumes with env-configurable names:
+  ```yaml
+  volumes:
+    stack-data:
+      name: ${STACK_DATA_VOLUME_NAME:-stack-data}
+  ```
+- **Network naming**: Use env-configurable names for both internal and external networks:
+  ```yaml
+  networks:
+    stack-internal:
+      name: ${STACK_NETWORK_NAME:-stack-internal}
+      internal: true
+      ipam:
+        driver: default
+        config:
+          - subnet: ${STACK_NETWORK_SUBNET:-172.X.0.0/24}
+            gateway: ${STACK_NETWORK_GATEWAY:-172.X.0.1}
+    services:
+      name: ${SERVICES_NETWORK_NAME:-services}
+      external: true
+  ```
 
 ## Service baseline (apply unless incompatible)
 
@@ -47,6 +68,7 @@ For each service:
 - **Logging**
   - Use the `json-file` driver with rotation:
     - `max-size` and `max-file` should be env-configurable.
+    - Prefer quoted env vars: `"${LOG_MAX_FILE:-3}"` and `"${LOG_MAX_SIZE:-10m}"`.
 - **Healthchecks**
   - Add a healthcheck when practical.
   - Prefer checks that don’t require extra packages (e.g., `wget --spider`, `nc`, language stdlib).
