@@ -1,0 +1,98 @@
+name: Deploy (SSH)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: "Stack name in stacks/<stack>"
+        required: true
+        default: "portainer"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ inputs.stack }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ vars.DEPLOY_ENVIRONMENT || 'klab' }}
+    steps:
+      - name: Setup SSH and Cloudflare Access
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+
+          # Setup SSH directory and known_hosts
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          : "${SSH_KNOWN_HOSTS:?missing secret SSH_KNOWN_HOSTS}"
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          # Install cloudflared
+          ARCH="$(uname -m)"
+          case "${ARCH}" in
+            x86_64) ARCH="amd64" ;;
+            aarch64|arm64) ARCH="arm64" ;;
+            *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;;
+          esac
+          VERSION="$(curl -sfL https://api.github.com/repos/cloudflare/cloudflared/releases/latest | jq -r '.tag_name')"
+          curl -sfL "https://github.com/cloudflare/cloudflared/releases/download/${VERSION}/cloudflared-linux-${ARCH}" -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          sudo mv /tmp/cloudflared /usr/local/bin/cloudflared
+
+          # Verify Cloudflare Access credentials
+          : "${CF_ACCESS_CLIENT_ID:?missing secret CF_ACCESS_CLIENT_ID}"
+          : "${CF_ACCESS_CLIENT_SECRET:?missing secret CF_ACCESS_CLIENT_SECRET}"
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy stack on remote host
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          STACK: ${{ inputs.stack }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          : "${SSH_HOST:?missing secret SSH_HOST}"
+          : "${SSH_USER:?missing secret SSH_USER}"
+          : "${DEPLOY_PATH:?missing secret DEPLOY_PATH}"
+          : "${CF_ACCESS_CLIENT_ID:?missing secret CF_ACCESS_CLIENT_ID}"
+          : "${CF_ACCESS_CLIENT_SECRET:?missing secret CF_ACCESS_CLIENT_SECRET}"
+          : "${STACK:?missing input stack}"
+          : "${SHA:?missing github.sha}"
+
+          if [[ ! "${STACK}" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+            echo "Invalid stack name: '${STACK}'" >&2
+            echo "Allowed: letters, digits, underscore, dash (must start with letter/digit)" >&2
+            exit 1
+          fi
+
+          echo "Deploying stack '${STACK}' via Cloudflare Access"
+          echo "Remote path: ${DEPLOY_PATH}"
+          echo "Git SHA: ${SHA}"
+
+          ssh \
+            -o StrictHostKeyChecking=yes \
+            -o ProxyCommand="cloudflared access ssh --hostname ${SSH_HOST} --id ${CF_ACCESS_CLIENT_ID} --secret ${CF_ACCESS_CLIENT_SECRET}" \
+            "${SSH_USER}@${SSH_HOST}" \
+            "set -euo pipefail
+             cd '${DEPLOY_PATH}'
+             git fetch --prune origin
+             git reset --hard '${SHA}'
+             bash scripts/stack.sh update '${STACK}'"

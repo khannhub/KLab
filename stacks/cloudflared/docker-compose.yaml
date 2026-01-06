@@ -1,0 +1,67 @@
+# Cloudflared (Cloudflare Tunnel)
+#
+# Requires:
+# - TUNNEL_TOKEN in stacks/cloudflared/.env (see .env.example)
+# - An external Docker network named `services` (create once before deploying stacks)
+name: cloudflared
+
+services:
+  cloudflared:
+    init: true
+    # Cloudflare Tunnel client.
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared}:${CLOUDFLARED_TAG:-latest}
+    restart: ${CLOUDFLARED_RESTART:-always}
+    hostname: ${CLOUDFLARED_HOSTNAME:-cloudflared}
+    container_name: ${CLOUDFLARED_CONTAINER_NAME:-cloudflared}
+
+    tmpfs:
+      # Writable scratch dirs for a read-only container.
+      - /tmp
+      - /run
+    cap_drop:
+      # Run with least privileges.
+      - ALL
+    networks:
+      # services: shared upstream network this tunnel should reach (external)
+      - services
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+    command:
+      # Metrics bind to 127.0.0.1 inside the container (used by healthcheck only).
+      - tunnel
+      - --no-autoupdate
+      - --loglevel
+      - ${CLOUDFLARED_LOGLEVEL:-info}
+      - --metrics
+      - ${CLOUDFLARED_METRICS_ADDR:-127.0.0.1:2000}
+      - run
+      - --token
+      - ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+
+    healthcheck:
+      # Uses the internal metrics endpoint; nothing is exposed on the host.
+      test:
+        - CMD
+        - cloudflared
+        - tunnel
+        - --metrics
+        - ${CLOUDFLARED_METRICS_ADDR:-127.0.0.1:2000}
+        - ready
+      retries: ${CLOUDFLARED_HEALTHCHECK_RETRIES:-3}
+      timeout: ${CLOUDFLARED_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${CLOUDFLARED_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${CLOUDFLARED_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${CLOUDFLARED_LOG_MAX_FILE:-3}"
+        max-size: "${CLOUDFLARED_LOG_MAX_SIZE:-10m}"
+
+networks:
+  services:
+    # Shared upstream bridge for services this tunnel should reach (external; must exist).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true

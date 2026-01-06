@@ -1,0 +1,197 @@
+# SillyTavern
+#
+# Notes:
+# - Do NOT expose this service directly to the internet. Use the `cloudflared`
+#   stack (Cloudflare Tunnel) or another gateway/reverse-proxy.
+# - This stack joins the external `services` network so `cloudflared` can reach
+#   it as: http://sillytavern:8000
+#
+# Docs:
+# - Docker install: https://docs.sillytavern.app/installation/docker/
+# - Config/env vars: https://docs.sillytavern.app/administration/config-yaml/
+# - Multi-user mode: https://docs.sillytavern.app/administration/multi-user/
+name: sillytavern
+
+services:
+  sillytavern:
+    init: true
+    image: ${SILLYTAVERN_IMAGE:-ghcr.io/sillytavern/sillytavern}:${SILLYTAVERN_TAG:-latest}
+    restart: ${SILLYTAVERN_RESTART:-always}
+    hostname: ${SILLYTAVERN_HOSTNAME:-sillytavern}
+    container_name: ${SILLYTAVERN_CONTAINER_NAME:-sillytavern}
+
+    expose:
+      # Exposed only to Docker networks (nothing is published on the host).
+      - ${SILLYTAVERN_PORT:-8000}
+    networks:
+      # services: shared upstream network for inter-stack traffic (external)
+      - services
+    volumes:
+      # Persist app config + data.
+      - sillytavern-data:/home/node/app/data
+      - sillytavern-config:/home/node/app/config
+      # Optional: server plugins + global UI extensions.
+      - sillytavern-plugins:/home/node/app/plugins
+      - sillytavern-extensions:/home/node/app/public/scripts/extensions/third-party
+      - ${SILLYTAVERN_LOCALTIME_MOUNT:-/etc/localtime:/etc/localtime:ro}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # Container timezone.
+      TZ: ${SILLYTAVERN_TIMEZONE:-Etc/UTC}
+      # --- SillyTavern config overrides --------------------------------------
+      # Data Configuration.
+      SILLYTAVERN_DATAROOT: ${SILLYTAVERN_DATAROOT:-./data}
+      SILLYTAVERN_SKIPCONTENTCHECK: ${SILLYTAVERN_SKIPCONTENTCHECK:-false}
+      SILLYTAVERN_ENABLEDOWNLOADABLETOKENIZERS: ${SILLYTAVERN_ENABLEDOWNLOADABLETOKENIZERS:-true}
+      # Logging Configuration.
+      # Default to INFO level logging.
+      SILLYTAVERN_LOGGING_MINLOGLEVEL: ${SILLYTAVERN_LOGGING_MINLOGLEVEL:-1}
+      SILLYTAVERN_LOGGING_ENABLEACCESSLOG: ${SILLYTAVERN_LOGGING_ENABLEACCESSLOG:-true}
+      # Network Configuration.
+      SILLYTAVERN_PORT: ${SILLYTAVERN_PORT:-8000}
+      SILLYTAVERN_LISTEN: ${SILLYTAVERN_LISTEN:-true}
+      SILLYTAVERN_DNSPREFERIPV6: ${SILLYTAVERN_DNSPREFERIPV6:-false}
+      SILLYTAVERN_PROTOCOL_IPV4: ${SILLYTAVERN_PROTOCOL_IPV4:-true}
+      SILLYTAVERN_PROTOCOL_IPV6: ${SILLYTAVERN_PROTOCOL_IPV6:-false}
+      SILLYTAVERN_LISTENADDRESS_IPV4: ${SILLYTAVERN_LISTENADDRESS_IPV4:-0.0.0.0}
+      SILLYTAVERN_LISTENADDRESS_IPV6: ${SILLYTAVERN_LISTENADDRESS_IPV6:-[::]}
+      # SSL Configuration.
+      SILLYTAVERN_SSL_ENABLED: ${SILLYTAVERN_SSL_ENABLED:-false}
+      SILLYTAVERN_SSL_KEYPATH: ${SILLYTAVERN_SSL_KEYPATH:-./certs/privkey.pem}
+      SILLYTAVERN_SSL_CERTPATH: ${SILLYTAVERN_SSL_CERTPATH:-./certs/cert.pem}
+      SILLYTAVERN_SSL_KEYPASSPHRASE: ${SILLYTAVERN_SSL_KEYPASSPHRASE:-}
+      # Security Configuration.
+      SILLYTAVERN_DISABLECSRFPROTECTION: ${SILLYTAVERN_DISABLECSRFPROTECTION:-false}
+      SILLYTAVERN_SECURITYOVERRIDE: ${SILLYTAVERN_SECURITYOVERRIDE:-false}
+      SILLYTAVERN_ALLOWKEYSEXPOSURE: ${SILLYTAVERN_ALLOWKEYSEXPOSURE:-false}
+      # IP Whitelisting.
+      # Keep whitelisting enabled by default and allow the shared `services` subnet (default: 172.10.0.0/24).
+      SILLYTAVERN_WHITELIST: ${SILLYTAVERN_WHITELIST:-["::1", "127.0.0.1", "172.10.0.0/24"]}
+      SILLYTAVERN_WHITELISTMODE: ${SILLYTAVERN_WHITELISTMODE:-true}
+      SILLYTAVERN_WHITELISTDOCKERHOSTS: ${SILLYTAVERN_WHITELISTDOCKERHOSTS:-true}
+      SILLYTAVERN_ENABLEFORWARDEDWHITELIST: ${SILLYTAVERN_ENABLEFORWARDEDWHITELIST:-false}
+      # Host Whitelisting.
+      SILLYTAVERN_HOSTWHITELIST_SCAN: ${SILLYTAVERN_HOSTWHITELIST_SCAN:-true}
+      SILLYTAVERN_HOSTWHITELIST_HOSTS: ${SILLYTAVERN_HOSTWHITELIST_HOSTS:-[]}
+      SILLYTAVERN_HOSTWHITELIST_ENABLED: ${SILLYTAVERN_HOSTWHITELIST_ENABLED:-false}
+      # User Authentication.
+      # Basic Authentication.
+      SILLYTAVERN_BASICAUTHMODE: ${SILLYTAVERN_BASICAUTHMODE:-false}
+      SILLYTAVERN_SESSIONTIMEOUT: ${SILLYTAVERN_SESSIONTIMEOUT:--1}
+      SILLYTAVERN_PERUSERBASICAUTH: ${SILLYTAVERN_PERUSERBASICAUTH:-false}
+      SILLYTAVERN_ENABLEUSERACCOUNTS: ${SILLYTAVERN_ENABLEUSERACCOUNTS:-true}
+      SILLYTAVERN_ENABLEDISCREETLOGIN: ${SILLYTAVERN_ENABLEDISCREETLOGIN:-true}
+      SILLYTAVERN_BASICAUTHUSER_USERNAME: ${SILLYTAVERN_BASICAUTHUSER_USERNAME:-user}
+      SILLYTAVERN_BASICAUTHUSER_PASSWORD: ${SILLYTAVERN_BASICAUTHUSER_PASSWORD:-password}
+      # SSO Auto-Login.
+      SILLYTAVERN_SSO_AUTHELIAAUTH: ${SILLYTAVERN_SSO_AUTHELIAAUTH:-false}
+      SILLYTAVERN_SSO_AUTHENTIKAUTH: ${SILLYTAVERN_SSO_AUTHENTIKAUTH:-false}
+      # Rate Limiting Configuration.
+      SILLYTAVERN_RATELIMITING_PREFERREALIPHEADER: ${SILLYTAVERN_RATELIMITING_PREFERREALIPHEADER:-true}
+      # Request Proxy Configuration.
+      SILLYTAVERN_REQUESTPROXY_ENABLED: ${SILLYTAVERN_REQUESTPROXY_ENABLED:-false}
+      SILLYTAVERN_REQUESTPROXY_URL: ${SILLYTAVERN_REQUESTPROXY_URL:-socks5://username:password@example.com:1080}
+      SILLYTAVERN_REQUESTPROXY_BYPASS: ${SILLYTAVERN_REQUESTPROXY_BYPASS:-["localhost", "127.0.0.1"]}
+      # CORS Proxy Configuration.
+      SILLYTAVERN_ENABLECORSPROXY: ${SILLYTAVERN_ENABLECORSPROXY:-false}
+      # Browser Launch Configuration.
+      SILLYTAVERN_BROWSERLAUNCH_ENABLED: ${SILLYTAVERN_BROWSERLAUNCH_ENABLED:-false}
+      SILLYTAVERN_BROWSERLAUNCH_BROWSER: ${SILLYTAVERN_BROWSERLAUNCH_BROWSER:-default}
+      SILLYTAVERN_BROWSERLAUNCH_HOSTNAME: ${SILLYTAVERN_BROWSERLAUNCH_HOSTNAME:-auto}
+      SILLYTAVERN_BROWSERLAUNCH_PORT: ${SILLYTAVERN_BROWSERLAUNCH_PORT:--1}
+      SILLYTAVERN_BROWSERLAUNCH_AVOIDLOCALHOST: ${SILLYTAVERN_BROWSERLAUNCH_AVOIDLOCALHOST:-false}
+      # Performance Configuration.
+      SILLYTAVERN_PERFORMANCE_LAZYLOADCHARACTERS: ${SILLYTAVERN_PERFORMANCE_LAZYLOADCHARACTERS:-true}
+      SILLYTAVERN_PERFORMANCE_USEDISKCACHE: ${SILLYTAVERN_PERFORMANCE_USEDISKCACHE:-true}
+      SILLYTAVERN_PERFORMANCE_MEMORYCACHECAPACITY: ${SILLYTAVERN_PERFORMANCE_MEMORYCACHECAPACITY:-100mb}
+      # Cache Buster Configuration
+      SILLYTAVERN_CACHEBUSTER_ENABLED: ${SILLYTAVERN_CACHEBUSTER_ENABLED:-true}
+      SILLYTAVERN_CACHEBUSTER_USERAGENTPATTERN: ${SILLYTAVERN_CACHEBUSTER_USERAGENTPATTERN:-}
+      # Thumbnailing Configuration.
+      SILLYTAVERN_THUMBNAILS_ENABLED: ${SILLYTAVERN_THUMBNAILS_ENABLED:-true}
+      SILLYTAVERN_THUMBNAILS_QUALITY: ${SILLYTAVERN_THUMBNAILS_QUALITY:-95}
+      SILLYTAVERN_THUMBNAILS_FORMAT: ${SILLYTAVERN_THUMBNAILS_FORMAT:-jpg}
+      SILLYTAVERN_THUMBNAILS_DIMENSIONS_BG: ${SILLYTAVERN_THUMBNAILS_DIMENSIONS_BG:-[160, 90]}
+      SILLYTAVERN_THUMBNAILS_DIMENSIONS_AVATAR: ${SILLYTAVERN_THUMBNAILS_DIMENSIONS_AVATAR:-[96, 144]}
+      SILLYTAVERN_THUMBNAILS_DIMENSIONS_PERSONA: ${SILLYTAVERN_THUMBNAILS_DIMENSIONS_PERSONA:-[96, 144]}
+      # Backup Configuration.
+      SILLYTAVERN_BACKUPS_CHAT_ENABLED: ${SILLYTAVERN_BACKUPS_CHAT_ENABLED:-true}
+      SILLYTAVERN_BACKUPS_CHAT_CHECKINTEGRITY: ${SILLYTAVERN_BACKUPS_CHAT_CHECKINTEGRITY:-true}
+      SILLYTAVERN_BACKUPS_COMMON_NUMBEROFBACKUPS: ${SILLYTAVERN_BACKUPS_COMMON_NUMBEROFBACKUPS:-50}
+      SILLYTAVERN_BACKUPS_CHAT_THROTTLEINTERVAL: ${SILLYTAVERN_BACKUPS_CHAT_THROTTLEINTERVAL:-10000}
+      SILLYTAVERN_BACKUPS_CHAT_MAXTOTALBACKUPS: ${SILLYTAVERN_BACKUPS_CHAT_MAXTOTALBACKUPS:--1}
+      # Extensions Configuration.
+      SILLYTAVERN_EXTENSIONS_ENABLED: ${SILLYTAVERN_EXTENSIONS_ENABLED:-true}
+      SILLYTAVERN_EXTENSIONS_AUTOUPDATE: ${SILLYTAVERN_EXTENSIONS_AUTOUPDATE:-true}
+      SILLYTAVERN_EXTENSIONS_MODELS_AUTODOWNLOAD: ${SILLYTAVERN_EXTENSIONS_MODELS_AUTODOWNLOAD:-true}
+      SILLYTAVERN_EXTENSIONS_MODELS_CLASSIFICATION: ${SILLYTAVERN_EXTENSIONS_MODELS_CLASSIFICATION:-Cohee/distilbert-base-uncased-go-emotions-onnx}
+      SILLYTAVERN_EXTENSIONS_MODELS_CAPTIONING: ${SILLYTAVERN_EXTENSIONS_MODELS_CAPTIONING:-Xenova/vit-gpt2-image-captioning}
+      SILLYTAVERN_EXTENSIONS_MODELS_EMBEDDING: ${SILLYTAVERN_EXTENSIONS_MODELS_EMBEDDING:-Cohee/jina-embeddings-v2-base-en}
+      SILLYTAVERN_EXTENSIONS_MODELS_SPEECHTOTEXT: ${SILLYTAVERN_EXTENSIONS_MODELS_SPEECHTOTEXT:-Xenova/whisper-small}
+      SILLYTAVERN_EXTENSIONS_MODELS_TEXTTOSPEECH: ${SILLYTAVERN_EXTENSIONS_MODELS_TEXTTOSPEECH:-Xenova/speecht5_tts}
+      # Server Plugins.
+      SILLYTAVERN_ENABLESERVERPLUGINS: ${SILLYTAVERN_ENABLESERVERPLUGINS:-false}
+      SILLYTAVERN_ENABLESERVERPLUGINSAUTOUPDATE: ${SILLYTAVERN_ENABLESERVERPLUGINSAUTOUPDATE:-true}
+      # API Integration Settings.
+      SILLYTAVERN_PROMPTPLACEHOLDER: ${SILLYTAVERN_PROMPTPLACEHOLDER:-[Start a new chat]}
+      # OpenAI Configuration.
+      SILLYTAVERN_OPENAI_RANDOMIZEUSERID: ${SILLYTAVERN_OPENAI_RANDOMIZEUSERID:-false}
+      SILLYTAVERN_OPENAI_CAPTIONSYSTEMPROMPT: ${SILLYTAVERN_OPENAI_CAPTIONSYSTEMPROMPT:-}
+      # MistralAI Configuration.
+      SILLYTAVERN_MISTRAL_ENABLEPREFIX: ${SILLYTAVERN_MISTRAL_ENABLEPREFIX:-false}
+      # Ollama Configuration.
+      SILLYTAVERN_OLLAMA_KEEPALIVE: ${SILLYTAVERN_OLLAMA_KEEPALIVE:--1}
+      SILLYTAVERN_OLLAMA_BATCHSIZE: ${SILLYTAVERN_OLLAMA_BATCHSIZE:--1}
+      # Claude Configuration.
+      SILLYTAVERN_CLAUDE_ENABLESYSTEMPROMPTCACHE: ${SILLYTAVERN_CLAUDE_ENABLESYSTEMPROMPTCACHE:-false}
+      SILLYTAVERN_CLAUDE_CACHINGATDEPTH: ${SILLYTAVERN_CLAUDE_CACHINGATDEPTH:--1}
+      SILLYTAVERN_CLAUDE_EXTENDEDTTL: ${SILLYTAVERN_CLAUDE_EXTENDEDTTL:-false}
+      #Google Gemini Configuration
+      SILLYTAVERN_GEMINI_APIVERSION: ${SILLYTAVERN_GEMINI_APIVERSION:-v1beta}
+      SILLYTAVERN_GEMINI_ENABLESYSTEMPROMPTCACHE: ${SILLYTAVERN_GEMINI_ENABLESYSTEMPROMPTCACHE:-false}
+      SILLYTAVERN_GEMINI_IMAGE_PERSONGENERATION: ${SILLYTAVERN_GEMINI_IMAGE_PERSONGENERATION:-allow_adult}
+      #DeepL Configuration
+      SILLYTAVERN_DEEPL_FORMALITY: ${SILLYTAVERN_DEEPL_FORMALITY:-default}
+
+    healthcheck:
+      # Basic port check using Node's stdlib (no curl/wget dependency).
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const net=require('net');const p=process.env.SILLYTAVERN_PORT||8000;
+          const s=net.connect(p,'127.0.0.1');s.on('connect',()=>process.exit(0));
+          s.on('error',()=>process.exit(1));"
+      retries: ${SILLYTAVERN_HEALTHCHECK_RETRIES:-5}
+      timeout: ${SILLYTAVERN_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${SILLYTAVERN_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${SILLYTAVERN_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: ${SILLYTAVERN_LOG_MAX_FILE:-3}
+        max-size: ${SILLYTAVERN_LOG_MAX_SIZE:-10m}
+
+volumes:
+  sillytavern-config:
+    # Stores SillyTavern config at /home/node/app/config.
+    name: ${SILLYTAVERN_CONFIG_VOLUME_NAME:-sillytavern-config}
+  sillytavern-data:
+    # Stores SillyTavern user data at /home/node/app/data.
+    name: ${SILLYTAVERN_DATA_VOLUME_NAME:-sillytavern-data}
+  sillytavern-plugins:
+    # Stores server plugins at /home/node/app/plugins.
+    name: ${SILLYTAVERN_PLUGINS_VOLUME_NAME:-sillytavern-plugins}
+  sillytavern-extensions:
+    # Stores global UI extensions at /home/node/app/public/scripts/extensions/third-party.
+    name: ${SILLYTAVERN_EXTENSIONS_VOLUME_NAME:-sillytavern-extensions}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true

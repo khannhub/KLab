@@ -1,0 +1,139 @@
+# Zoraxy (reverse proxy / gateway)
+#
+# Includes a docker-socket-proxy so Zoraxy can talk to Docker without direct
+# access to /var/run/docker.sock.
+#
+# Requires:
+# - external Docker network `services` (create once before deploying stacks)
+name: zoraxy
+
+services:
+  zoraxy-socket-proxy:
+    init: true
+    # Restricted Docker API proxy (see env allowlist below).
+    image: ${ZORAXY_SOCKET_PROXY_IMAGE:-ghcr.io/tecnativa/docker-socket-proxy}:${ZORAXY_SOCKET_PROXY_TAG:-latest}
+    restart: ${ZORAXY_SOCKET_PROXY_RESTART:-always}
+    hostname: ${ZORAXY_SOCKET_PROXY_HOSTNAME:-zoraxy-socket-proxy}
+    container_name: ${ZORAXY_SOCKET_PROXY_CONTAINER_NAME:-zoraxy-socket-proxy}
+
+    expose:
+      # Docker API exposed only to the internal `zoraxy` network.
+      - "${ZORAXY_SOCKET_PROXY_PORT:-2375}"
+    volumes:
+      # Read-only access to Docker socket for the proxy.
+      - ${ZORAXY_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock:ro}
+    networks:
+      - zoraxy
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget --spider --no-verbose --tries=1 http://127.0.0.1:${ZORAXY_SOCKET_PROXY_PORT:-2375}/_ping
+      retries: ${ZORAXY_SOCKET_PROXY_HEALTHCHECK_RETRIES:-5}
+      timeout: ${ZORAXY_SOCKET_PROXY_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${ZORAXY_SOCKET_PROXY_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${ZORAXY_SOCKET_PROXY_HEALTHCHECK_START_PERIOD:-15s}
+
+    environment:
+      # Allowlist of Docker API sections Zoraxy is allowed to use.
+      LOG_LEVEL: info
+      INFO: 1
+      PING: 1
+      EVENTS: 1
+      VERSION: 1
+      NETWORKS: 1
+      CONTAINERS: 1
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${ZORAXY_SOCKET_PROXY_LOG_MAX_FILE:-3}"
+        max-size: "${ZORAXY_SOCKET_PROXY_LOG_MAX_SIZE:-10m}"
+
+  zoraxy:
+    init: true
+    # Zoraxy UI + proxy.
+    image: ${ZORAXY_IMAGE:-zoraxydocker/zoraxy}:${ZORAXY_TAG:-latest}
+    restart: ${ZORAXY_RESTART:-always}
+    hostname: ${ZORAXY_HOSTNAME:-zoraxy}
+    container_name: ${ZORAXY_CONTAINER_NAME:-zoraxy}
+
+    depends_on:
+      zoraxy-socket-proxy:
+        condition: service_healthy
+
+    ports:
+      # Reverse-proxy Admin UI.
+      - "${ZORAXY_HOST_UI_PORT:-8000}:8000"
+    expose:
+      # Reverse-proxy entrypoints and Admin UI.
+      - 443
+      - 8000
+    volumes:
+      # Persistent config + plugins.
+      - zoraxy-config:/opt/zoraxy/config
+      - zoraxy-plugins:/opt/zoraxy/plugin
+      - ${ZORAXY_LOCALTIME_MOUNT:-/etc/localtime:/etc/localtime:ro}
+    cap_add:
+      # Required for features like ZeroTier (TUN device + networking changes).
+      - NET_ADMIN
+      - SYS_ADMIN
+    devices:
+      # TUN device (needed when ZEROTIER=true).
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      # zoraxy: stack-internal network (socket proxy)
+      # services: shared upstream network this gateway should reach (external)
+      - zoraxy
+      - services
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # Timezone inside the container (override in .env).
+      TZ: ${ZORAXY_TIMEZONE:-Etc/UTC}
+      # Toggle optional features (see Zoraxy docs for details).
+      ZEROTIER: ${ZORAXY_ZEROTIER:-true}
+      FASTGEOIP: ${ZORAXY_FASTGEOIP:-false}
+      # Use the restricted socket proxy instead of the real Docker socket.
+      DOCKER_HOST: tcp://${ZORAXY_SOCKET_PROXY_SERVICE_NAME:-zoraxy-socket-proxy}:${ZORAXY_SOCKET_PROXY_PORT:-2375}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - nc -vz 127.0.0.1 ${ZORAXY_CONTAINER_UI_PORT:-8000}
+      retries: ${ZORAXY_HEALTHCHECK_RETRIES:-5}
+      timeout: ${ZORAXY_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${ZORAXY_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${ZORAXY_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${ZORAXY_LOG_MAX_FILE:-3}"
+        max-size: "${ZORAXY_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  zoraxy-config:
+    # Stores config at /opt/zoraxy/config.
+    name: ${ZORAXY_CONFIG_VOLUME_NAME:-zoraxy-config}
+  zoraxy-plugins:
+    # Stores plugins at /opt/zoraxy/plugin.
+    name: ${ZORAXY_PLUGINS_VOLUME_NAME:-zoraxy-plugins}
+
+networks:
+  zoraxy:
+    # Stack-internal network (only socket-proxy <-> zoraxy traffic).
+    name: ${ZORAXY_NETWORK_NAME:-zoraxy}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${ZORAXY_NETWORK_SUBNET:-172.2.0.0/24}
+          gateway: ${ZORAXY_NETWORK_GATEWAY:-172.2.0.1}
+  services:
+    # Shared upstream bridge for services exposed to gateways (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
