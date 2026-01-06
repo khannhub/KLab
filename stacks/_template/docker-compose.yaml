@@ -1,0 +1,30 @@
+# Stack template (example compose)
+#
+# Copy this folder to start a new stack and replace the example service with
+# your real services/volumes/networks.
+
+services:
+  example:
+    # Tiny HTTP service used for demo/testing.
+    image: ${EXAMPLE_IMAGE:-traefik/whoami}:${EXAMPLE_TAG:-latest}
+    restart: ${EXAMPLE_RESTART:-unless-stopped}
+    hostname: ${EXAMPLE_HOSTNAME:-example}
+    container_name: ${EXAMPLE_CONTAINER_NAME:-example}
+
+    networks:
+      # Shared network for inter-stack traffic (external; must exist).
+      - services
+
+    environment:
+      # Timezone inside the container (override in .env).
+      TZ: ${TZ:-UTC}
+
+    ports:
+      # Publish container port 80 on a configurable host port.
+      - ${EXAMPLE_PORT:-8080}:80
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    external: true
+    name: ${SERVICES_NETWORK_NAME:-services}

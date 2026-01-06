@@ -1,0 +1,145 @@
+# Portainer (Docker management UI)
+#
+# Includes a docker-socket-proxy so Portainer does not need direct access to
+# /var/run/docker.sock.
+name: portainer
+
+services:
+  portainer-socket-proxy:
+    init: true
+    # Restricted Docker API proxy (see env allowlist below).
+    image: ${PORTAINER_SOCKET_PROXY_IMAGE:-ghcr.io/tecnativa/docker-socket-proxy}:${PORTAINER_SOCKET_PROXY_TAG:-latest}
+    restart: ${PORTAINER_SOCKET_PROXY_RESTART:-always}
+    hostname: ${PORTAINER_SOCKET_PROXY_HOSTNAME:-portainer-socket-proxy}
+    container_name: ${PORTAINER_SOCKET_PROXY_CONTAINER_NAME:-portainer-socket-proxy}
+
+    expose:
+      # Docker API exposed only to the internal `portainer` network.
+      - "${PORTAINER_SOCKET_PROXY_PORT:-2375}"
+    volumes:
+      # Docker socket access for the proxy. Consider adding :ro if your usage allows it.
+      - ${PORTAINER_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock}
+    networks:
+      - portainer
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget --spider --no-verbose --tries=1 http://127.0.0.1:${PORTAINER_SOCKET_PROXY_PORT:-2375}/_ping
+      retries: ${PORTAINER_SOCKET_PROXY_HEALTHCHECK_RETRIES:-5}
+      timeout: ${PORTAINER_SOCKET_PROXY_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${PORTAINER_SOCKET_PROXY_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${PORTAINER_SOCKET_PROXY_HEALTHCHECK_START_PERIOD:-15s}
+
+    environment:
+      # Allowlist of Docker API sections Portainer is allowed to use.
+      LOG_LEVEL: info
+      EXEC: 1
+      INFO: 1
+      PING: 1
+      POST: 1
+      BUILD: 1
+      NODES: 1
+      TASKS: 1
+      SWARM: 1
+      EVENTS: 1
+      IMAGES: 1
+      COMMIT: 1
+      SYSTEM: 1
+      PLUGINS: 1
+      VERSION: 1
+      VOLUMES: 1
+      CONFIGS: 1
+      SECRETS: 1
+      NETWORKS: 1
+      SERVICES: 1
+      CONTAINERS: 1
+      ALLOW_STOP: 1
+      ALLOW_START: 1
+      ALLOW_RESTARTS: 1
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${PORTAINER_SOCKET_PROXY_LOG_MAX_FILE:-3}"
+        max-size: "${PORTAINER_SOCKET_PROXY_LOG_MAX_SIZE:-10m}"
+
+  portainer:
+    init: true
+    # Portainer UI/API.
+    image: ${PORTAINER_IMAGE:-portainer/portainer-ee}:${PORTAINER_TAG:-lts}
+    restart: ${PORTAINER_RESTART:-always}
+    hostname: ${PORTAINER_HOSTNAME:-portainer}
+    container_name: ${PORTAINER_CONTAINER_NAME:-portainer}
+
+    depends_on:
+      portainer-socket-proxy:
+        condition: service_healthy
+
+    networks:
+      # portainer: internal network for socket proxy communication
+      # services: shared upstream network this gateway should reach (external)
+      - portainer
+      - services
+    expose:
+      # HTTPS UI/API.
+      - 9443
+    ports:
+      # HTTPS UI/API.
+      - "${PORTAINER_HOST_HTTPS_PORT:-9443}:${PORTAINER_CONTAINER_HTTPS_PORT:-9443}"
+    volumes:
+      # Persistent data.
+      - portainer:/data
+    security_opt:
+      - no-new-privileges:true
+
+    command:
+      # Point Portainer at the socket proxy and hard-disable plain HTTP.
+      - -H
+      - tcp://${PORTAINER_SOCKET_PROXY_SERVICE_NAME:-portainer-socket-proxy}:${PORTAINER_SOCKET_PROXY_PORT:-2375}
+      - --http-disabled
+      - --trusted-origins
+      - ${PORTAINER_ORIGINS:-localhost}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget --spider --no-verbose --tries=1 --no-check-certificate
+          https://127.0.0.1:${PORTAINER_CONTAINER_HTTPS_PORT:-9443}/api/system/status
+      retries: ${PORTAINER_HEALTHCHECK_RETRIES:-5}
+      timeout: ${PORTAINER_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${PORTAINER_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${PORTAINER_HEALTHCHECK_START_PERIOD:-15s}
+
+    environment:
+      # Set the timezone inside the container (override in .env).
+      TZ: ${PORTAINER_TIMEZONE:-Etc/UTC}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${PORTAINER_LOG_MAX_FILE:-3}"
+        max-size: "${PORTAINER_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  portainer:
+    # Stores Portainer data at /data.
+    name: ${PORTAINER_DATA_VOLUME_NAME:-portainer}
+
+networks:
+  portainer:
+    # Stack network for proxy <-> portainer traffic.
+    name: ${PORTAINER_NETWORK_NAME:-portainer}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${PORTAINER_NETWORK_SUBNET:-172.1.0.0/24}
+          gateway: ${PORTAINER_NETWORK_GATEWAY:-172.1.0.1}
+  services:
+    # Shared upstream bridge for services exposed to gateways (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true

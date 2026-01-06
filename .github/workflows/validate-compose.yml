@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/**
+      - .github/dependabot.yml
+      - .yamllint.yml
+      - stacks/**
+      - scripts/**
+      - Makefile
+  pull_request:
+    paths:
+      - .github/workflows/**
+      - .github/dependabot.yml
+      - .yamllint.yml
+      - stacks/**
+      - scripts/**
+      - Makefile
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint GitHub Actions workflows (actionlint)
+        uses: raven-actions/actionlint@v2
+
+      - name: Lint YAML (yamllint)
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .github stacks
+          config_file: .yamllint.yml
+          format: parsable
+          strict: true
+
+      - name: Shellcheck scripts
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            echo "shellcheck already installed"
+          else
+            echo "shellcheck not found; installing"
+            sudo apt-get update
+            sudo apt-get install -y shellcheck
+          fi
+          shellcheck scripts/*.sh
+
+      - name: Validate stacks
+        run: bash scripts/stack.sh validate
