@@ -1,0 +1,294 @@
+# Authentik (IdP / SSO)
+#
+# This stack does not publish the UI/API on the host by default. Access it via a
+# reverse proxy (e.g. the `zoraxy` stack) or temporarily publish port 9000 on
+# `authentik-server` for local bootstrap/testing.
+#
+# Requires:
+# - external Docker network `services` (create once before deploying stacks)
+name: authentik
+
+services:
+  authentik-redis:
+    init: true
+    # Redis used by Authentik for caching / task queue.
+    image: ${AUTHENTIK_REDIS_IMAGE:-redis}:${AUTHENTIK_REDIS_TAG:-alpine}
+    restart: ${AUTHENTIK_REDIS_RESTART:-always}
+    hostname: ${AUTHENTIK_REDIS_HOSTNAME:-authentik-redis}
+    container_name: ${AUTHENTIK_REDIS_CONTAINER_NAME:-authentik-redis}
+
+    volumes:
+      # Persistent Redis data.
+      - authentik-redis:/data
+    networks:
+      # authentik: stack-internal network
+      - authentik
+    security_opt:
+      - no-new-privileges:true
+
+    # Persist snapshots every 60s if at least 1 key changed.
+    command:
+      - redis-server
+      - --save
+      - ${AUTHENTIK_REDIS_SAVE_SECONDS:-60}
+      - ${AUTHENTIK_REDIS_SAVE_CHANGES:-1}
+      - --loglevel
+      - ${AUTHENTIK_REDIS_LOGLEVEL:-warning}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli ping
+      retries: ${AUTHENTIK_REDIS_HEALTHCHECK_RETRIES:-5}
+      timeout: ${AUTHENTIK_REDIS_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${AUTHENTIK_REDIS_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${AUTHENTIK_REDIS_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AUTHENTIK_REDIS_LOG_MAX_FILE:-3}"
+        max-size: "${AUTHENTIK_REDIS_LOG_MAX_SIZE:-10m}"
+
+  authentik-postgresql:
+    init: true
+    # PostgreSQL database for Authentik.
+    image: ${AUTHENTIK_POSTGRES_IMAGE:-postgres}:${AUTHENTIK_POSTGRES_TAG:-alpine}
+    restart: ${AUTHENTIK_POSTGRES_RESTART:-always}
+    hostname: ${AUTHENTIK_POSTGRES_HOSTNAME:-authentik-postgresql}
+    container_name: ${AUTHENTIK_POSTGRES_CONTAINER_NAME:-authentik-postgresql}
+
+    volumes:
+      # Persistent database storage.
+      - authentik-postgresql:/var/lib/postgresql
+    networks:
+      - authentik
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # DB name/user can usually stay as defaults; password must be set in .env.
+      POSTGRES_DB: ${POSTGRES_DB:-authentik}
+      POSTGRES_USER: ${POSTGRES_USER:-authentik}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      retries: ${AUTHENTIK_POSTGRES_HEALTHCHECK_RETRIES:-5}
+      timeout: ${AUTHENTIK_POSTGRES_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${AUTHENTIK_POSTGRES_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${AUTHENTIK_POSTGRES_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AUTHENTIK_POSTGRES_LOG_MAX_FILE:-3}"
+        max-size: "${AUTHENTIK_POSTGRES_LOG_MAX_SIZE:-10m}"
+
+  authentik-socket-proxy:
+    init: true
+    # Restricted Docker API proxy (used for Docker integration without giving
+    # Authentik direct access to /var/run/docker.sock).
+    image: ${AUTHENTIK_SOCKET_PROXY_IMAGE:-ghcr.io/tecnativa/docker-socket-proxy}:${AUTHENTIK_SOCKET_PROXY_TAG:-latest}
+    restart: ${AUTHENTIK_SOCKET_PROXY_RESTART:-always}
+    hostname: ${AUTHENTIK_SOCKET_PROXY_HOSTNAME:-authentik-socket-proxy}
+    container_name: ${AUTHENTIK_SOCKET_PROXY_CONTAINER_NAME:-authentik-socket-proxy}
+
+    expose:
+      # Docker API exposed only within the `authentik` network.
+      - "${AUTHENTIK_SOCKET_PROXY_PORT:-2375}"
+    volumes:
+      # Docker socket access for the proxy. Consider adding :ro if your usage allows it.
+      - ${AUTHENTIK_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock}
+    networks:
+      - authentik
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget --spider --no-verbose --tries=1 http://127.0.0.1:${AUTHENTIK_SOCKET_PROXY_PORT:-2375}/_ping
+      retries: ${AUTHENTIK_SOCKET_PROXY_HEALTHCHECK_RETRIES:-5}
+      timeout: ${AUTHENTIK_SOCKET_PROXY_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${AUTHENTIK_SOCKET_PROXY_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${AUTHENTIK_SOCKET_PROXY_HEALTHCHECK_START_PERIOD:-15s}
+
+    environment:
+      # Allowlist of Docker API sections Authentik is allowed to use.
+      LOG_LEVEL: info
+      INFO: 1
+      PING: 1
+      POST: 1
+      EVENTS: 1
+      IMAGES: 1
+      VERSION: 1
+      VOLUMES: 1
+      NETWORKS: 1
+      CONTAINERS: 1
+      ALLOW_STOP: 1
+      ALLOW_START: 1
+      ALLOW_RESTARTS: 1
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AUTHENTIK_SOCKET_PROXY_LOG_MAX_FILE:-3}"
+        max-size: "${AUTHENTIK_SOCKET_PROXY_LOG_MAX_SIZE:-10m}"
+
+  authentik-server:
+    init: true
+    # Authentik web UI + API (listens on 9000 inside the container).
+    image: ${AUTHENTIK_IMAGE:-authentik/server}:${AUTHENTIK_TAG:-2025.10}
+    restart: ${AUTHENTIK_SERVER_RESTART:-always}
+    hostname: ${AUTHENTIK_SERVER_HOSTNAME:-authentik-server}
+    container_name: ${AUTHENTIK_SERVER_CONTAINER_NAME:-authentik-server}
+
+    depends_on:
+      authentik-redis:
+        condition: service_healthy
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-socket-proxy:
+        condition: service_healthy
+
+    networks:
+      - authentik
+      - services
+
+    # Publish UI/API to the host for local bootstrap/testing.
+    expose:
+      - 9000
+    volumes:
+      # Persistent media + customization.
+      - authentik-media:/media
+      - authentik-templates:/templates
+      - authentik-blueprints:/blueprints
+    security_opt:
+      - no-new-privileges:true
+
+    command: server
+
+    environment:
+      # Internal service discovery.
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${POSTGRES_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+      # App settings (see stacks/authentik/.env.example).
+      AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?set AUTHENTIK_SECRET_KEY in .env}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: ${AUTHENTIK_ERROR_REPORTING__ENABLED:-false}
+      AUTHENTIK_EMAIL__HOST: ${AUTHENTIK_EMAIL__HOST:-}
+      AUTHENTIK_EMAIL__PORT: ${AUTHENTIK_EMAIL__PORT:-587}
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL__FROM:-authentik@localhost}
+      AUTHENTIK_EMAIL__USE_TLS: ${AUTHENTIK_EMAIL__USE_TLS:-true}
+      AUTHENTIK_EMAIL__USE_SSL: ${AUTHENTIK_EMAIL__USE_SSL:-false}
+      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL__USERNAME:-}
+      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL__PASSWORD:-}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/-/health/ready/').read()"
+      retries: ${AUTHENTIK_SERVER_HEALTHCHECK_RETRIES:-5}
+      timeout: ${AUTHENTIK_SERVER_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${AUTHENTIK_SERVER_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${AUTHENTIK_SERVER_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AUTHENTIK_SERVER_LOG_MAX_FILE:-3}"
+        max-size: "${AUTHENTIK_SERVER_LOG_MAX_SIZE:-10m}"
+
+  authentik-worker:
+    init: true
+    # Background worker (tasks, outposts, housekeeping, etc.).
+    image: ${AUTHENTIK_IMAGE:-authentik/server}:${AUTHENTIK_TAG:-2025.10}
+    restart: ${AUTHENTIK_WORKER_RESTART:-always}
+    hostname: ${AUTHENTIK_WORKER_HOSTNAME:-authentik-worker}
+    container_name: ${AUTHENTIK_WORKER_CONTAINER_NAME:-authentik-worker}
+
+    depends_on:
+      authentik-redis:
+        condition: service_healthy
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-socket-proxy:
+        condition: service_healthy
+
+    networks:
+      - authentik
+    volumes:
+      - authentik-media:/media
+      - authentik-templates:/templates
+      - authentik-blueprints:/blueprints
+    security_opt:
+      - no-new-privileges:true
+
+    command: worker
+
+    environment:
+      # Internal service discovery.
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${POSTGRES_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+      # App settings (see stacks/authentik/.env.example).
+      AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?set AUTHENTIK_SECRET_KEY in .env}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: ${AUTHENTIK_ERROR_REPORTING__ENABLED:-false}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - ak healthcheck
+      retries: ${AUTHENTIK_WORKER_HEALTHCHECK_RETRIES:-5}
+      timeout: ${AUTHENTIK_WORKER_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${AUTHENTIK_WORKER_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${AUTHENTIK_WORKER_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AUTHENTIK_WORKER_LOG_MAX_FILE:-3}"
+        max-size: "${AUTHENTIK_WORKER_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  authentik-redis:
+    # Redis persistence.
+    name: ${AUTHENTIK_REDIS_VOLUME_NAME:-authentik-redis}
+  authentik-media:
+    # Uploaded media and generated assets.
+    name: ${AUTHENTIK_MEDIA_VOLUME_NAME:-authentik-media}
+  authentik-templates:
+    # Custom templates.
+    name: ${AUTHENTIK_TEMPLATES_VOLUME_NAME:-authentik-templates}
+  authentik-blueprints:
+    # Blueprints for configuration-as-code.
+    name: ${AUTHENTIK_BLUEPRINTS_VOLUME_NAME:-authentik-blueprints}
+  authentik-postgresql:
+    # Database persistence.
+    name: ${AUTHENTIK_POSTGRES_VOLUME_NAME:-authentik-postgresql}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
+  authentik:
+    # Shared network for authentik services
+    name: ${AUTHENTIK_NETWORK_NAME:-authentik}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${AUTHENTIK_NETWORK_SUBNET:-172.3.0.0/24}
+          gateway: ${AUTHENTIK_NETWORK_GATEWAY:-172.3.0.1}
