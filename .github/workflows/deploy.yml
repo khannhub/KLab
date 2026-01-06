@@ -87,9 +87,11 @@ jobs:
           echo "Remote path: ${DEPLOY_PATH}"
           echo "Git SHA: ${SHA}"
 
+          PROXY_CMD="cloudflared access ssh --hostname ${SSH_HOST} \
+            --id ${CF_ACCESS_CLIENT_ID} --secret ${CF_ACCESS_CLIENT_SECRET}"
           ssh \
             -o StrictHostKeyChecking=yes \
-            -o ProxyCommand="cloudflared access ssh --hostname ${SSH_HOST} --id ${CF_ACCESS_CLIENT_ID} --secret ${CF_ACCESS_CLIENT_SECRET}" \
+            -o ProxyCommand="${PROXY_CMD}" \
             "${SSH_USER}@${SSH_HOST}" \
             "set -euo pipefail
              cd '${DEPLOY_PATH}'
