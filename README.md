@@ -8,7 +8,7 @@ Docker Compose stacks + notes for running my homelab.
 
 ## What’s in here
 
-- **Compose stacks** live in `stacks/<stack>/docker-compose.yaml`
+- **Compose stacks** live in `stacks/<stack>/docker-compose.yml`
 - **Stack docs** live next to each stack (`stacks/<stack>/README.md`)
 - **Helper commands** live in the `Makefile` (wrapping `scripts/stack.sh`)
 
