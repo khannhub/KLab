@@ -1,7 +1,7 @@
 ---
 description: "Compose stacks: authoring conventions, security baseline, and operational safety"
 globs:
-  - "stacks/**/docker-compose.yaml"
+  - "stacks/**/docker-compose.yml"
   - "stacks/**/docker-compose.yml"
 alwaysApply: false
 ---
@@ -60,7 +60,7 @@ For each service:
     - `security_opt: ["no-new-privileges:true"]`
   - Prefer:
     - `cap_drop: ["ALL"]`
-    - `read_only: true` plus `tmpfs: ["/tmp", "/run"]` when the app supports it (see `stacks/cloudflared/docker-compose.yaml` pattern).
+    - `read_only: true` plus `tmpfs: ["/tmp", "/run"]` when the app supports it (see `stacks/cloudflared/docker-compose.yml` pattern).
   - Avoid:
     - `privileged: true`
     - `network_mode: host`

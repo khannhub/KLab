@@ -2,7 +2,7 @@
 
 Stacks live in subfolders:
 
-- `stacks/<stack>/docker-compose.yaml`
+- `stacks/<stack>/docker-compose.yml`
 - Optional: `stacks/<stack>/.env` (local only; **gitignored**)
 - Optional: `stacks/<stack>/.env.example` (**committed**)
 - Optional: `stacks/<stack>/README.md` (**committed**)
@@ -50,7 +50,7 @@ cp -R stacks/_template stacks/<new-stack>
 
 Then edit:
 
-- `stacks/<new-stack>/docker-compose.yaml`
+- `stacks/<new-stack>/docker-compose.yml`
 - `stacks/<new-stack>/.env.example`
 - `stacks/<new-stack>/README.md`
 

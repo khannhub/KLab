@@ -23,7 +23,7 @@ make up zoraxy
 # Or deploy via Portainer UI:
 # - Stacks -> Add stack
 # - Name: zoraxy
-# - Web editor: paste stacks/zoraxy/docker-compose.yaml
+# - Web editor: paste stacks/zoraxy/docker-compose.yml
 ```
 
 ## Access
@@ -33,7 +33,7 @@ make up zoraxy
 
 ## Notes
 
-- **Env**: most values are configurable via environment variables (with safe defaults in `docker-compose.yaml`). See `stacks/zoraxy/.env.example` for the full list.
+- **Env**: most values are configurable via environment variables (with safe defaults in `docker-compose.yml`). See `stacks/zoraxy/.env.example` for the full list.
 - **Networking**:
   - `zoraxy` network is **internal** (only stack-internal traffic)
   - `services` network is shared for upstream services exposed to Zoraxy (external; must exist)

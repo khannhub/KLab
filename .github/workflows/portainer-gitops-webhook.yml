@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - stacks/*/docker-compose.yaml
+      - stacks/*/docker-compose.yml
 
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
             exit 0
           fi
 
-          files="$(git diff --name-only "${base}" "${head}" -- 'stacks/*/docker-compose.yaml' || true)"
+          files="$(git diff --name-only "${base}" "${head}" -- 'stacks/*/docker-compose.yml' || true)"
 
           if [[ -z "${files}" ]]; then
             echo "changed_stacks_json=[]" >> "${GITHUB_OUTPUT}"
@@ -81,4 +81,4 @@ jobs:
 
       - name: Skip (no matching stack compose changes)
         if: steps.changes.outputs.changed_stacks_json == '[]'
-        run: echo "No stacks/*/docker-compose.yaml changes detected; nothing to trigger."
+        run: echo "No stacks/*/docker-compose.yml changes detected; nothing to trigger."

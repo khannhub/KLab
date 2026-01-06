@@ -35,14 +35,14 @@ make up authentik
 # Or deploy via Portainer UI:
 # - Stacks -> Add stack
 # - Name: authentik
-# - Web editor: paste stacks/authentik/docker-compose.yaml
+# - Web editor: paste stacks/authentik/docker-compose.yml
 ```
 
 ## Access
 
 - **UI**: this stack does **not** publish ports on the host.
   - If you use the `zoraxy` stack, add a route to `authentik-server:9000` on the `services` network.
-  - For local bootstrap/testing, temporarily publish `9000:9000` on `authentik-server` (see comments in `docker-compose.yaml`).
+  - For local bootstrap/testing, temporarily publish `9000:9000` on `authentik-server` (see comments in `docker-compose.yml`).
 
 ## Notes
 

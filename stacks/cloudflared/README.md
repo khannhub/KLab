@@ -26,7 +26,7 @@ make up cloudflared
 # Or deploy via Portainer UI:
 # - Stacks -> Add stack
 # - Name: cloudflared
-# - Web editor: paste stacks/cloudflared/docker-compose.yaml
+# - Web editor: paste stacks/cloudflared/docker-compose.yml
 ```
 
 ## Access
