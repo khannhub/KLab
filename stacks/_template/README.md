@@ -8,7 +8,7 @@ cp -R stacks/_template stacks/<new-stack>
 
 Then update:
 
-- `docker-compose.yaml` (services, ports, volumes, labels)
+- `docker-compose.yml` (services, ports, volumes, labels)
 - `.env.example` (document required env vars)
 - `README.md` (how to deploy + how to access)
 

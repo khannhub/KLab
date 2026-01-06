@@ -62,7 +62,7 @@ Usage:
   bash scripts/stack.sh validate
 
 Notes:
-  - Stack directories must be in stacks/<stack>/docker-compose.yaml (legacy: docker/stacks/<stack>/docker-compose.yaml)
+  - Stack directories must be in stacks/<stack>/docker-compose.yml (legacy: docker/stacks/<stack>/docker-compose.yml)
   - Directories starting with '_' are ignored (e.g. _template)
   - If stacks/<stack>/.env exists, it's passed via --env-file
   - validate/config will fall back to .env.example when .env isn't present
@@ -141,7 +141,7 @@ list_stacks() {
     local name
     name="$(basename "$dir")"
     [[ "$name" == _* ]] && continue
-    [[ -f "${dir}/docker-compose.yaml" ]] || continue
+    [[ -f "${dir}/docker-compose.yml" ]] || continue
     echo "$name"
   done | sort
 }
@@ -155,7 +155,7 @@ stack_dir() {
 
 compose_file() {
   local dir="${1:?stack dir required}"
-  local file="${dir}/docker-compose.yaml"
+  local file="${dir}/docker-compose.yml"
   [[ -f "$file" ]] || die "missing compose file: ${file}"
   echo "$file"
 }

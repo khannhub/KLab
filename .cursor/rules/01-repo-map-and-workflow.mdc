@@ -14,8 +14,8 @@ alwaysApply: false
 
 ## Repo map (what matters)
 
-- **Stacks**: one folder per stack; each stack has a `docker-compose.yaml` and a `README.md`.
-  - Current on-disk layout in this repo is `stacks/<stack>/docker-compose.yaml`.
+- **Stacks**: one folder per stack; each stack has a `docker-compose.yml` and a `README.md`.
+  - Current on-disk layout in this repo is `stacks/<stack>/docker-compose.yml`.
   - Legacy layout (older versions) used `docker/stacks/<stack>`.
 - **Entry points**
   - `Makefile`: the human-friendly interface (`make up <stack>`, `make update <stack>`, etc.).

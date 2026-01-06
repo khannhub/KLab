@@ -2,7 +2,7 @@
 description: "GitHub Actions: security, reproducibility, and stack-safe deployments"
 globs:
   - ".github/workflows/**/*.yml"
-  - ".github/workflows/**/*.yaml"
+  - ".github/workflows/**/*.yml"
   - ".github/dependabot.yml"
 alwaysApply: false
 ---
