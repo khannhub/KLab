@@ -7,12 +7,19 @@ This stack runs:
 
 ## Deploy
 
-This stack joins the external `services` network:
+This stack joins an external network named `services`:
 
 - `services` must be created once:
 
 ```bash
 make net services
+```
+
+Copy `stacks/zoraxy/.env.example` to `stacks/zoraxy/.env` (gitignored) and customize as needed:
+
+```bash
+make init zoraxy
+# Edit stacks/zoraxy/.env with your values
 ```
 
 Then deploy:
@@ -40,3 +47,12 @@ make up zoraxy
 - **Volumes**:
   - `zoraxy-config` stores config at `/opt/zoraxy/config`
   - `zoraxy-plugins` stores plugins at `/opt/zoraxy/plugin`
+- **Security**: uses docker-socket-proxy with read-only socket access for enhanced security
+
+## Upgrade
+
+Bump `ZORAXY_TAG` in `stacks/zoraxy/.env` and redeploy:
+
+```bash
+make update zoraxy
+```
