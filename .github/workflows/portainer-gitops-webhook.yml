@@ -51,6 +51,13 @@ jobs:
               | jq -R -s -c 'split("\n") | map(select(length > 0))'
           )"
 
+          # Validate the generated JSON
+          if ! echo "${stacks_json}" | jq empty 2>/dev/null; then
+            echo "Error: Failed to generate valid JSON for changed stacks"
+            echo "Generated value: ${stacks_json}"
+            exit 1
+          fi
+
           echo "changed_stacks_json=${stacks_json}" >> "${GITHUB_OUTPUT}"
 
       - name: Trigger Portainer webhooks
@@ -65,6 +72,20 @@ jobs:
           if [[ -z "${PORTAINER_WEBHOOKS_JSON}" || "${PORTAINER_WEBHOOKS_JSON}" == "null" ]]; then
             echo "PORTAINER_WEBHOOKS secret not set; skipping Portainer webhook trigger."
             exit 0
+          fi
+
+          # Validate JSON inputs
+          if ! echo "${CHANGED_STACKS_JSON}" | jq empty 2>/dev/null; then
+            echo "Error: CHANGED_STACKS_JSON is not valid JSON"
+            echo "Value: ${CHANGED_STACKS_JSON}"
+            exit 1
+          fi
+
+          if ! echo "${PORTAINER_WEBHOOKS_JSON}" | jq empty 2>/dev/null; then
+            echo "Error: PORTAINER_WEBHOOKS secret is not valid JSON"
+            echo "Please verify the secret format. Expected: {\"stack-name\": \"webhook-url\", ...}"
+            jq . <<< "${PORTAINER_WEBHOOKS_JSON}" 2>&1 || true
+            exit 1
           fi
 
           echo "${CHANGED_STACKS_JSON}" | jq -r '.[]' | while IFS= read -r stack; do
