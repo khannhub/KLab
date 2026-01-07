@@ -59,8 +59,8 @@ Then edit:
 ### Shared network (must exist)
 
 - `services`: shared bridge for inter-stack traffic (**must be created once** before deploying stacks that reference it)
-  - **Subnet**: `172.20.0.0/16`
-  - **Gateway**: `172.20.0.1`
+  - **Subnet**: `172.10.0.0/24`
+  - **Gateway**: `172.10.0.1`
 
 ### Core stack networks (created by stacks)
 

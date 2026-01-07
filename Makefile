@@ -50,11 +50,11 @@ help:
 	@echo "  make logs portainer -- -f --tail 200"
 
 ls list stacks:
-	@bash scripts/stack.sh list
+	@bash scripts/stack.sh list || exit 1
 
 net network:
 	@test -n "$(STACK)" || (echo "usage: make net services" >&2; exit 2)
-	@bash scripts/stack.sh network "$(STACK)" $(EXTRA)
+	@bash scripts/stack.sh network "$(STACK)" $(EXTRA) || exit 1
 
 init:
 	@test -n "$(STACK)" || (echo "usage: make init <stack>" >&2; exit 2)
@@ -93,7 +93,7 @@ config:
 	@bash scripts/stack.sh config "$(STACK)" $(EXTRA)
 
 validate:
-	@bash scripts/stack.sh validate
+	@bash scripts/stack.sh validate || exit 1
 
 dc compose:
 	@test -n "$(STACK)" || (echo "usage: make dc <stack> -- <docker compose args...>" >&2; exit 2)

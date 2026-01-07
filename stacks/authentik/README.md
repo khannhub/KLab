@@ -10,7 +10,7 @@ This stack runs:
 
 ## Deploy
 
-This stack joins external networks named `services` and `portainer`:
+This stack joins external networks named `services`:
 
 - `services` must be created once:
 
@@ -18,13 +18,13 @@ This stack joins external networks named `services` and `portainer`:
 make net services
 ```
 
-- `portainer` is created when you deploy the Portainer stack (recommended first).
-
 Copy `stacks/authentik/.env.example` to `stacks/authentik/.env` (gitignored) and set at least:
 
 ```bash
-POSTGRES_PASSWORD=replace-me
-AUTHENTIK_SECRET_KEY=replace-me
+make init authentik
+# Edit stacks/authentik/.env and set:
+# - POSTGRES_PASSWORD (strong password)
+# - AUTHENTIK_SECRET_KEY (generate with: python -c "import secrets; print(secrets.token_urlsafe(64))")
 ```
 
 Then deploy:
@@ -46,20 +46,24 @@ make up authentik
 
 ## Notes
 
+- **Env**: most values are configurable via environment variables (with safe defaults in `docker-compose.yml`). See `stacks/authentik/.env.example` for the full list.
+  - `POSTGRES_PASSWORD` and `AUTHENTIK_SECRET_KEY` are required (see `.env.example` for guidance)
+  - Optional email settings are supported via `AUTHENTIK_EMAIL__*`
 - **Networking**:
   - `authentik` network is **internal** (stack-internal traffic only)
   - `services` network is **external** and shared for inter-stack traffic (must exist)
-  - `portainer` network is shared with Portainer (external; created by the Portainer stack)
 - **Volumes**:
   - `authentik-postgresql` stores the database at `/var/lib/postgresql/data`
   - `authentik-redis` stores Redis data at `/data`
   - `authentik-media` stores uploaded files at `/media`
   - `authentik-templates` stores custom templates at `/templates`
   - `authentik-blueprints` stores blueprints at `/blueprints`
-- **Env**:
-  - `POSTGRES_PASSWORD` and `AUTHENTIK_SECRET_KEY` are required (see `.env.example` for guidance)
-  - Optional email settings are supported via `AUTHENTIK_EMAIL__*`
+- **Security**: uses docker-socket-proxy with read-only socket access for enhanced security
 
 ## Upgrade
 
-Bump `AUTHENTIK_TAG` in `stacks/authentik/.env` and redeploy the stack in Portainer.
+Bump `AUTHENTIK_TAG` in `stacks/authentik/.env` and redeploy:
+
+```bash
+make update authentik
+```

@@ -17,8 +17,8 @@ services:
       # Docker API exposed only to the internal `portainer` network.
       - "${PORTAINER_SOCKET_PROXY_PORT:-2375}"
     volumes:
-      # Docker socket access for the proxy. Consider adding :ro if your usage allows it.
-      - ${PORTAINER_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock}
+      # Read-only access to Docker socket for the proxy.
+      - ${PORTAINER_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock:ro}
     networks:
       - portainer
     security_opt:
