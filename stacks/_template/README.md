@@ -1,18 +1,53 @@
-# Stack Template
+# Example Stack
 
-Copy this folder to start a new stack:
+This stack runs:
+
+- **Example Service** (`traefik/whoami:latest`)
+
+## Deploy
+
+This stack joins an external network named `services`:
+
+- `services` must be created once:
 
 ```bash
-cp -R stacks/_template stacks/<new-stack>
+make net services
 ```
 
-Then update:
+Copy `stacks/example/.env.example` to `stacks/example/.env` (gitignored) and customize as needed:
 
-- `docker-compose.yml` (services, ports, volumes, labels)
-- `.env.example` (document required env vars)
-- `README.md` (how to deploy + how to access)
+```bash
+cp stacks/example/.env.example stacks/example/.env
+# Edit stacks/example/.env with your values
+```
 
-## Conventions
+Then deploy:
 
-- Put real values in `.env` (gitignored)
-- Commit `.env.example` with safe defaults/examples
+```bash
+make up example
+
+# Or deploy via Portainer UI:
+# - Stacks -> Add stack
+# - Name: example
+# - Web editor: paste stacks/example/docker-compose.yml
+```
+
+## Access
+
+- **UI**: `http://<host>:8080`
+
+## Notes
+
+- **Env**: most values are configurable via environment variables (with safe defaults in `docker-compose.yml`). See `stacks/example/.env.example` for the full list.
+- **Networking**:
+  - `services` network is shared for inter-stack traffic (external; must exist)
+- **Ports**: this stack publishes port `8080` on the host for the UI
+- **Security**: review and configure security settings as needed for your deployment
+
+## Upgrade
+
+Bump `EXAMPLE_TAG` in `stacks/example/.env` and redeploy:
+
+```bash
+make update example
+```

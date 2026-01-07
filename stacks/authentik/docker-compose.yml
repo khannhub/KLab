@@ -100,8 +100,8 @@ services:
       # Docker API exposed only within the `authentik` network.
       - "${AUTHENTIK_SOCKET_PROXY_PORT:-2375}"
     volumes:
-      # Docker socket access for the proxy. Consider adding :ro if your usage allows it.
-      - ${AUTHENTIK_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock}
+      # Read-only access to Docker socket for the proxy.
+      - ${AUTHENTIK_DOCKER_SOCK_MOUNT:-/var/run/docker.sock:/var/run/docker.sock:ro}
     networks:
       - authentik
     security_opt:

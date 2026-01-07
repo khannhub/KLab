@@ -148,6 +148,10 @@ list_stacks() {
 
 stack_dir() {
   local stack="${1:?stack name required}"
+  # Validate stack name: alphanumeric, dash, underscore (must start with alphanumeric)
+  if [[ ! "${stack}" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+    die "invalid stack name: ${stack} (must start with alphanumeric, allow alphanumeric/dash/underscore)"
+  fi
   local dir="${STACKS_DIR}/${stack}"
   [[ -d "$dir" ]] || die "unknown stack: ${stack} (expected directory ${dir})"
   echo "$dir"

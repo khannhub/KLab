@@ -6,7 +6,9 @@ This stack runs:
 
 ## Deploy
 
-This stack joins an external network named `services`. Create it once:
+This stack joins an external network named `services`:
+
+- `services` must be created once:
 
 ```bash
 make net services
@@ -15,7 +17,8 @@ make net services
 Copy `stacks/cloudflared/.env.example` to `stacks/cloudflared/.env` (gitignored) and set your tunnel token:
 
 ```bash
-TUNNEL_TOKEN=<your token>
+make init cloudflared
+# Edit stacks/cloudflared/.env and set TUNNEL_TOKEN
 ```
 
 Then deploy:
@@ -36,9 +39,17 @@ make up cloudflared
 
 ## Notes
 
-- **Env**: `TUNNEL_TOKEN` is required (see `stacks/cloudflared/.env.example`).
+- **Env**: `TUNNEL_TOKEN` is required (see `stacks/cloudflared/.env.example`). Most other values are configurable via environment variables with safe defaults.
 - **Networking**:
   - `services` network is shared for upstream services the tunnel should reach (external; must exist)
 - **Ports**: this stack does not publish any ports on the host.
 - **Metrics/healthcheck**: metrics are bound to `127.0.0.1:2000` _inside the container_ and used for the healthcheck; they are not exposed to the host/network.
 - **Security**: runs with a read-only filesystem, tmpfs for `/tmp` + `/run`, and `cap_drop: [ALL]`.
+
+## Upgrade
+
+Bump `CLOUDFLARED_TAG` in `stacks/cloudflared/.env` and redeploy:
+
+```bash
+make update cloudflared
+```
