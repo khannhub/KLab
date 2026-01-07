@@ -22,7 +22,7 @@ alwaysApply: false
   - `scripts/stack.sh`: the single “source of truth” CLI that Make/CI/CD call.
 - **GitHub Actions**
   - `.github/workflows/validate-compose.yml`: lints workflows/YAML/shell and runs `bash scripts/stack.sh validate`.
-  - `.github/workflows/deploy.yml`: manual SSH deploy that runs `bash scripts/stack.sh update <stack>` on the remote.
+  - `.github/workflows/deploy.yml`: manual SSH deploy that runs `make update <stack>` on the remote.
   - `.github/workflows/portainer-gitops-webhook.yml`: optional Portainer GitOps webhook trigger based on stack compose changes.
 
 ## How stacks are expected to work

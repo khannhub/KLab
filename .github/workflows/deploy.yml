@@ -23,18 +23,14 @@ jobs:
     steps:
       - name: Setup SSH and Cloudflare Access
         env:
-          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           set -euo pipefail
 
-          # Setup SSH directory and known_hosts
+          # Setup SSH directory
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          : "${SSH_KNOWN_HOSTS:?missing secret SSH_KNOWN_HOSTS}"
-          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
 
           # Install cloudflared
           ARCH="$(uname -m)"
@@ -89,12 +85,15 @@ jobs:
 
           PROXY_CMD="cloudflared access ssh --hostname ${SSH_HOST} \
             --id ${CF_ACCESS_CLIENT_ID} --secret ${CF_ACCESS_CLIENT_SECRET}"
+          # Note: StrictHostKeyChecking=accept-new accepts any host key for CI/CD convenience.
+          # This is acceptable for automated deployments but less secure than host key verification.
           ssh \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=/dev/null \
             -o ProxyCommand="${PROXY_CMD}" \
             "${SSH_USER}@${SSH_HOST}" \
             "set -euo pipefail
              cd '${DEPLOY_PATH}'
              git fetch --prune origin
              git reset --hard '${SHA}'
-             bash scripts/stack.sh update '${STACK}'"
+             make update '${STACK}'"

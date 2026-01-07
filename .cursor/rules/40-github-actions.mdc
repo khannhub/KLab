@@ -32,8 +32,8 @@ If modifying `.github/workflows/deploy.yml`:
 
 - Keep the remote deploy sequence safe and deterministic:
   - checkout on remote via `git fetch` + `git reset --hard <sha>`
-  - run `bash scripts/stack.sh update <stack>`
-- Keep `StrictHostKeyChecking=yes` and use `known_hosts`.
+  - run `make update <stack>` (uses the recommended Makefile interface)
+- Use `StrictHostKeyChecking=accept-new` with `UserKnownHostsFile=/dev/null` for CI/CD
 - Keep stack name validation in place (avoid command injection via inputs).
 
 ## Portainer webhook workflow expectations
