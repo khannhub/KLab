@@ -17,7 +17,7 @@ services:
 
     environment:
       # Timezone inside the container (override in .env).
-      TZ: ${TZ:-UTC}
+      TZ: ${EXAMPLE_TIMEZONE:-Etc/UTC}
 
     ports:
       # Publish container port 80 on a configurable host port.
