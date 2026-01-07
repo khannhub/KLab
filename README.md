@@ -50,8 +50,8 @@ make validate
 - **Document env**: commit `stacks/<stack>/.env.example`
 - **Shared networking**:
   - `services`: shared bridge for inter-stack traffic (must be created once, e.g. via `make net services`)
-    - **Subnet**: `172.20.0.0/16`
-    - **Gateway**: `172.20.0.1`
+    - **Subnet**: `172.10.0.0/24`
+    - **Gateway**: `172.10.0.1`
   - Core stack networks are created by their stacks (see `stacks/README.md` for the reserved subnets)
 
 ## Stacks
@@ -82,14 +82,15 @@ Required repo (or environment) secrets:
 - **`SSH_HOST`**: homelab host (e.g. `nas.lan`)
 - **`SSH_USER`**: ssh user (e.g. `ubuntu`)
 - **`SSH_PRIVATE_KEY`**: private key for the deploy user
-- **`SSH_KNOWN_HOSTS`**: host key line(s) (recommended)
 - **`DEPLOY_PATH`**: path to this repo on the homelab host (e.g. `/opt/klab`)
+- **`CF_ACCESS_CLIENT_ID`**: Cloudflare Access client ID (for SSH tunneling)
+- **`CF_ACCESS_CLIENT_SECRET`**: Cloudflare Access client secret (for SSH tunneling)
 - **`SSH_PORT`**: optional (defaults to `22`)
 
 The deploy job will SSH in, `git fetch` + `git reset --hard` to the workflow’s commit SHA, then run:
 
 ```bash
-bash scripts/stack.sh update portainer
+make update portainer
 ```
 
 ### CD / Portainer GitOps webhook (opt-in)
