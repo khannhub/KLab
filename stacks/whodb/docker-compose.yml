@@ -1,0 +1,46 @@
+# WhoDB
+#
+# Notes:
+# - This stack does NOT publish ports on the host by default.
+# - Access it from other stacks via the shared `services` network.
+# - WhoDB defaults to the `latest` image tag; pin it in .env for reproducible upgrades.
+name: whodb
+
+services:
+  whodb:
+    init: true
+    image: ${WHODB_IMAGE:-clidey/whodb}:${WHODB_TAG:-latest}
+    restart: ${WHODB_RESTART:-always}
+    hostname: ${WHODB_HOSTNAME:-whodb}
+    container_name: ${WHODB_CONTAINER_NAME:-whodb}
+
+    networks:
+      - services
+    expose:
+      # Web UI (internal only).
+      - 8080
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      TZ: ${WHODB_TIMEZONE:-Etc/UTC}
+
+      # Optional AI integrations.
+      WHODB_OLLAMA_HOST: ${WHODB_OLLAMA_HOST:-}
+      WHODB_OLLAMA_PORT: ${WHODB_OLLAMA_PORT:-11434}
+      WHODB_OPENAI_API_KEY: ${WHODB_OPENAI_API_KEY:-}
+      WHODB_OPENAI_ENDPOINT: ${WHODB_OPENAI_ENDPOINT:-}
+      WHODB_ANTHROPIC_API_KEY: ${WHODB_ANTHROPIC_API_KEY:-}
+      WHODB_ANTHROPIC_ENDPOINT: ${WHODB_ANTHROPIC_ENDPOINT:-}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${WHODB_LOG_MAX_FILE:-3}"
+        max-size: "${WHODB_LOG_MAX_SIZE:-10m}"
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
