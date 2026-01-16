@@ -48,7 +48,10 @@ services:
       test:
         - CMD-SHELL
         - >-
-          mongosh --quiet --username "${LIBRECHAT_MONGO_ROOT_USERNAME:-root}" --password "${LIBRECHAT_MONGO_ROOT_PASSWORD:-replace-me}" --authenticationDatabase admin
+          mongosh --quiet
+          --username "${LIBRECHAT_MONGO_ROOT_USERNAME:-root}"
+          --password "${LIBRECHAT_MONGO_ROOT_PASSWORD:-replace-me}"
+          --authenticationDatabase admin
           --eval "db.adminCommand('ping').ok" | grep -q 1
       retries: ${LIBRECHAT_MONGO_HEALTHCHECK_RETRIES:-5}
       timeout: ${LIBRECHAT_MONGO_HEALTHCHECK_TIMEOUT:-5s}
