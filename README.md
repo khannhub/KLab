@@ -59,8 +59,15 @@ make validate
 - **Portainer**: `stacks/portainer` (see stack README for details)
 - **Zoraxy**: `stacks/zoraxy` (reverse proxy + gateway)
 - **cloudflared**: `stacks/cloudflared` (Cloudflare Tunnel)
+- **OpenWebUI**: `stacks/openwebui`
+- **LibreChat**: `stacks/librechat`
+- **LobeChat**: `stacks/lobechat` (server database version)
 - **SillyTavern**: `stacks/sillytavern`
 - **authentik**: `stacks/authentik` (IdP / SSO)
+- **Postgres**: `stacks/postgres`
+- **MySQL**: `stacks/mysql`
+- **MongoDB**: `stacks/mongodb`
+- **WhoDB**: `stacks/whodb` (database manager UI)
 
 ## CI/CD
 

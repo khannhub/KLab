@@ -1,0 +1,267 @@
+# LibreChat
+#
+# Notes:
+# - This stack does NOT publish the UI on the host by default. Access it via a
+#   reverse proxy / tunnel (e.g. the `zoraxy` or `cloudflared` stacks).
+# - LibreChat listens on port 3080 by default.
+#
+# Docs / upstream references:
+# - Repo: https://github.com/danny-avila/LibreChat
+# - Upstream docker-compose.yml (example): https://raw.githubusercontent.com/danny-avila/LibreChat/main/docker-compose.yml
+# - Helm docs mention required secrets: CREDS_KEY, CREDS_IV, JWT_SECRET, JWT_REFRESH_SECRET, MEILI_MASTER_KEY
+#   https://raw.githubusercontent.com/danny-avila/LibreChat/main/helm/librechat/readme.md
+name: librechat
+
+services:
+  librechat-mongodb:
+    init: true
+    image: ${LIBRECHAT_MONGO_IMAGE:-mongo}:${LIBRECHAT_MONGO_TAG:-8.0.17}
+    restart: ${LIBRECHAT_MONGO_RESTART:-always}
+    hostname: ${LIBRECHAT_MONGO_HOSTNAME:-librechat-mongodb}
+    container_name: ${LIBRECHAT_MONGO_CONTAINER_NAME:-librechat-mongodb}
+
+    networks:
+      - librechat
+    volumes:
+      - librechat-mongodb-data:/data/db
+      - ./mongodb-init.js:/docker-entrypoint-initdb.d/01-librechat-user.js:ro
+    security_opt:
+      - no-new-privileges:true
+
+    command:
+      - mongod
+      - --auth
+      - --bind_ip_all
+
+    environment:
+      # Root/admin user (required when running with --auth).
+      MONGO_INITDB_ROOT_USERNAME: ${LIBRECHAT_MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${LIBRECHAT_MONGO_ROOT_PASSWORD:-replace-me}
+      # Default database name (also used by the init script for permissions).
+      MONGO_INITDB_DATABASE: ${LIBRECHAT_MONGO_DB:-LibreChat}
+
+      # LibreChat app user (created by mongodb-init.js on first boot).
+      LIBRECHAT_MONGO_USER: ${LIBRECHAT_MONGO_USER:-librechat}
+      LIBRECHAT_MONGO_PASSWORD: ${LIBRECHAT_MONGO_PASSWORD:-replace-me}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          --username "${LIBRECHAT_MONGO_ROOT_USERNAME:-root}"
+          --password "${LIBRECHAT_MONGO_ROOT_PASSWORD:-replace-me}"
+          --authenticationDatabase admin
+          --eval "db.adminCommand('ping').ok" | grep -q 1
+      retries: ${LIBRECHAT_MONGO_HEALTHCHECK_RETRIES:-5}
+      timeout: ${LIBRECHAT_MONGO_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${LIBRECHAT_MONGO_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${LIBRECHAT_MONGO_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LIBRECHAT_MONGO_LOG_MAX_FILE:-3}"
+        max-size: "${LIBRECHAT_MONGO_LOG_MAX_SIZE:-10m}"
+
+  librechat-meilisearch:
+    init: true
+    image: ${LIBRECHAT_MEILI_IMAGE:-getmeili/meilisearch}:${LIBRECHAT_MEILI_TAG:-v1.12.3}
+    restart: ${LIBRECHAT_MEILI_RESTART:-always}
+    hostname: ${LIBRECHAT_MEILI_HOSTNAME:-librechat-meilisearch}
+    container_name: ${LIBRECHAT_MEILI_CONTAINER_NAME:-librechat-meilisearch}
+
+    networks:
+      - librechat
+    volumes:
+      - librechat-meilisearch-data:/meili_data
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      MEILI_HOST: http://${LIBRECHAT_MEILI_SERVICE_NAME:-librechat-meilisearch}:${LIBRECHAT_MEILI_PORT:-7700}
+      MEILI_NO_ANALYTICS: ${LIBRECHAT_MEILI_NO_ANALYTICS:-true}
+      # Required for production (LibreChat uses this to talk to Meilisearch).
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-replace-me}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LIBRECHAT_MEILI_LOG_MAX_FILE:-3}"
+        max-size: "${LIBRECHAT_MEILI_LOG_MAX_SIZE:-10m}"
+
+  librechat-vectordb:
+    init: true
+    image: ${LIBRECHAT_VECTORDB_IMAGE:-pgvector/pgvector}:${LIBRECHAT_VECTORDB_TAG:-0.8.0-pg15-trixie}
+    restart: ${LIBRECHAT_VECTORDB_RESTART:-always}
+    hostname: ${LIBRECHAT_VECTORDB_HOSTNAME:-librechat-vectordb}
+    container_name: ${LIBRECHAT_VECTORDB_CONTAINER_NAME:-librechat-vectordb}
+
+    networks:
+      - librechat
+    volumes:
+      - librechat-vectordb-data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      POSTGRES_DB: ${LIBRECHAT_VECTORDB_POSTGRES_DB:-librechat}
+      POSTGRES_USER: ${LIBRECHAT_VECTORDB_POSTGRES_USER:-librechat}
+      POSTGRES_PASSWORD: ${LIBRECHAT_VECTORDB_POSTGRES_PASSWORD:-replace-me}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d "${LIBRECHAT_VECTORDB_POSTGRES_DB:-librechat}" -U "${LIBRECHAT_VECTORDB_POSTGRES_USER:-librechat}"
+      retries: ${LIBRECHAT_VECTORDB_HEALTHCHECK_RETRIES:-5}
+      timeout: ${LIBRECHAT_VECTORDB_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${LIBRECHAT_VECTORDB_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${LIBRECHAT_VECTORDB_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LIBRECHAT_VECTORDB_LOG_MAX_FILE:-3}"
+        max-size: "${LIBRECHAT_VECTORDB_LOG_MAX_SIZE:-10m}"
+
+  librechat-rag-api:
+    init: true
+    image: ${LIBRECHAT_RAG_API_IMAGE:-ghcr.io/danny-avila/librechat-rag-api-dev-lite}:${LIBRECHAT_RAG_API_TAG:-latest}
+    restart: ${LIBRECHAT_RAG_API_RESTART:-always}
+    hostname: ${LIBRECHAT_RAG_API_HOSTNAME:-librechat-rag-api}
+    container_name: ${LIBRECHAT_RAG_API_CONTAINER_NAME:-librechat-rag-api}
+
+    depends_on:
+      librechat-vectordb:
+        condition: service_healthy
+
+    networks:
+      - librechat
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      DB_HOST: ${LIBRECHAT_RAG_DB_HOST:-librechat-vectordb}
+      RAG_PORT: ${LIBRECHAT_RAG_PORT:-8000}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LIBRECHAT_RAG_API_LOG_MAX_FILE:-3}"
+        max-size: "${LIBRECHAT_RAG_API_LOG_MAX_SIZE:-10m}"
+
+  librechat:
+    init: true
+    image: ${LIBRECHAT_IMAGE:-ghcr.io/danny-avila/librechat}:${LIBRECHAT_TAG:-latest}
+    restart: ${LIBRECHAT_RESTART:-always}
+    hostname: ${LIBRECHAT_HOSTNAME:-librechat}
+    container_name: ${LIBRECHAT_CONTAINER_NAME:-librechat}
+
+    depends_on:
+      librechat-mongodb:
+        condition: service_healthy
+      librechat-meilisearch:
+        condition: service_started
+      librechat-rag-api:
+        condition: service_started
+
+    networks:
+      - librechat
+      - services
+
+    expose:
+      # Exposed only to Docker networks (nothing is published on the host).
+      - ${LIBRECHAT_PORT:-3080}
+
+    volumes:
+      # Optional: custom branding images.
+      - librechat-images:/app/client/public/images
+      # File uploads (chat attachments, etc.).
+      - librechat-uploads:/app/uploads
+      # App logs.
+      - librechat-logs:/app/logs
+
+    extra_hosts:
+      # Allows reaching services on the Docker host from inside the container.
+      - host.docker.internal:host-gateway
+
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # Core service config.
+      HOST: 0.0.0.0
+      PORT: ${LIBRECHAT_PORT:-3080}
+      NODE_ENV: ${LIBRECHAT_NODE_ENV:-production}
+      TZ: ${LIBRECHAT_TIMEZONE:-Etc/UTC}
+
+      # DB/search dependencies.
+      MONGO_URI: mongodb://${LIBRECHAT_MONGO_USER:-librechat}:${LIBRECHAT_MONGO_PASSWORD:-replace-me}@${LIBRECHAT_MONGO_SERVICE_NAME:-librechat-mongodb}:${LIBRECHAT_MONGO_PORT:-27017}/${LIBRECHAT_MONGO_DB:-LibreChat}?authSource=admin
+      MEILI_HOST: http://${LIBRECHAT_MEILI_SERVICE_NAME:-librechat-meilisearch}:${LIBRECHAT_MEILI_PORT:-7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-replace-me}
+
+      # RAG API.
+      RAG_PORT: ${LIBRECHAT_RAG_PORT:-8000}
+      RAG_API_URL: http://${LIBRECHAT_RAG_API_SERVICE_NAME:-librechat-rag-api}:${LIBRECHAT_RAG_PORT:-8000}
+
+      # Security-critical secrets (required for production; see upstream docs).
+      CREDS_KEY: ${CREDS_KEY:-replace-me}
+      CREDS_IV: ${CREDS_IV:-replace-me}
+      JWT_SECRET: ${JWT_SECRET:-replace-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-replace-me}
+
+      # Reverse-proxy settings (recommended when running behind a gateway).
+      DOMAIN_CLIENT: ${DOMAIN_CLIENT:-http://localhost:3080}
+      DOMAIN_SERVER: ${DOMAIN_SERVER:-http://localhost:3080}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+
+      # Optional: reduce search engine indexing.
+      NO_INDEX: ${NO_INDEX:-true}
+
+    healthcheck:
+      # Basic port check using Node's stdlib (no curl/wget dependency).
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const net=require('net');const p=process.env.PORT||3080;
+          const s=net.connect(p,'127.0.0.1');s.on('connect',()=>process.exit(0));
+          s.on('error',()=>process.exit(1));"
+      retries: ${LIBRECHAT_HEALTHCHECK_RETRIES:-5}
+      timeout: ${LIBRECHAT_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${LIBRECHAT_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${LIBRECHAT_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LIBRECHAT_LOG_MAX_FILE:-3}"
+        max-size: "${LIBRECHAT_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  librechat-mongodb-data:
+    name: ${LIBRECHAT_MONGO_VOLUME_NAME:-librechat-mongodb-data}
+  librechat-meilisearch-data:
+    name: ${LIBRECHAT_MEILI_VOLUME_NAME:-librechat-meilisearch-data}
+  librechat-vectordb-data:
+    name: ${LIBRECHAT_VECTORDB_VOLUME_NAME:-librechat-vectordb-data}
+  librechat-images:
+    name: ${LIBRECHAT_IMAGES_VOLUME_NAME:-librechat-images}
+  librechat-uploads:
+    name: ${LIBRECHAT_UPLOADS_VOLUME_NAME:-librechat-uploads}
+  librechat-logs:
+    name: ${LIBRECHAT_LOGS_VOLUME_NAME:-librechat-logs}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
+  librechat:
+    # Stack-internal network for DB/search dependencies.
+    name: ${LIBRECHAT_NETWORK_NAME:-librechat}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${LIBRECHAT_NETWORK_SUBNET:-172.101.0.0/24}
+          gateway: ${LIBRECHAT_NETWORK_GATEWAY:-172.101.0.1}

@@ -1,0 +1,60 @@
+# MongoDB
+#
+# Notes:
+# - This stack does NOT publish ports on the host by default.
+# - Access it from other stacks via the shared `services` network.
+# - Set MONGODB_ROOT_PASSWORD in stacks/mongodb/.env before deploying.
+name: mongodb
+
+services:
+  mongodb:
+    init: true
+    image: ${MONGODB_IMAGE:-mongo}:${MONGODB_TAG:-7.0}
+    restart: ${MONGODB_RESTART:-always}
+    hostname: ${MONGODB_HOSTNAME:-mongodb}
+    container_name: ${MONGODB_CONTAINER_NAME:-mongodb}
+
+    networks:
+      - services
+    expose:
+      # MongoDB default port (internal only).
+      - 27017
+    volumes:
+      - mongodb-data:/data/db
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      TZ: ${MONGODB_TIMEZONE:-Etc/UTC}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD:?set MONGODB_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-app}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --username "${MONGODB_ROOT_USERNAME:-root}"
+          --password "${MONGODB_ROOT_PASSWORD}" --authenticationDatabase admin
+          --eval "db.runCommand({ ping: 1 }).ok" | grep -q 1
+      retries: ${MONGODB_HEALTHCHECK_RETRIES:-5}
+      timeout: ${MONGODB_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${MONGODB_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${MONGODB_HEALTHCHECK_START_PERIOD:-20s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${MONGODB_LOG_MAX_FILE:-3}"
+        max-size: "${MONGODB_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  mongodb-data:
+    # Stores database data at /data/db.
+    name: ${MONGODB_DATA_VOLUME_NAME:-mongodb-data}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
