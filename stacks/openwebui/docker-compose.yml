@@ -1,0 +1,107 @@
+# OpenWebUI
+#
+# Notes:
+# - This stack does NOT publish the UI on the host by default. Access it via a
+#   reverse proxy / tunnel (e.g. the `zoraxy` or `cloudflared` stacks).
+# - OpenWebUI listens on port 8080 inside the container.
+# - Persistent data lives at: /app/backend/data
+#
+# Docs:
+# - Quickstart: https://docs.openwebui.com/getting-started/quick-start/
+name: openwebui
+
+services:
+  openwebui:
+    init: true
+    image: ${OPENWEBUI_IMAGE:-ghcr.io/open-webui/open-webui}:${OPENWEBUI_TAG:-v0.6.42}
+    restart: ${OPENWEBUI_RESTART:-always}
+    hostname: ${OPENWEBUI_HOSTNAME:-openwebui}
+    container_name: ${OPENWEBUI_CONTAINER_NAME:-openwebui}
+
+    networks:
+      - openwebui
+      - services
+
+    expose:
+      # Exposed only to Docker networks (nothing is published on the host).
+      - ${OPENWEBUI_PORT:-8080}
+
+    volumes:
+      # Persistent chats/settings/uploads/etc.
+      - openwebui-data:/app/backend/data
+
+    environment:
+      # Container timezone.
+      TZ: ${OPENWEBUI_TIMEZONE:-Etc/UTC}
+
+      # Single-user mode (Disabling Login). WARNING: irreversible once set.
+      # Leave enabled for multi-user deployments.
+      WEBUI_AUTH: ${OPENWEBUI_AUTH:-true}
+
+      # Recommended: set a strong secret key for session/cookie/security features.
+      # Generate one: openssl rand -base64 48
+      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY:-}
+
+      # Connect to an Ollama instance (local host or another container).
+      # Example (host): http://host.docker.internal:11434
+      # Example (container on services network): http://ollama:11434
+      OLLAMA_BASE_URL: ${OPENWEBUI_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+
+      # Optional OpenAI-compatible endpoint (leave blank if not used).
+      OPENAI_API_BASE_URL: ${OPENWEBUI_OPENAI_API_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENWEBUI_OPENAI_API_KEY:-}
+
+      # Privacy/telemetry settings (see upstream .env.example)
+      SCARF_NO_ANALYTICS: ${OPENWEBUI_SCARF_NO_ANALYTICS:-true}
+      DO_NOT_TRACK: ${OPENWEBUI_DO_NOT_TRACK:-true}
+      ANONYMIZED_TELEMETRY: ${OPENWEBUI_ANONYMIZED_TELEMETRY:-false}
+
+      # Reverse-proxy related settings (keep permissive by default; tighten if desired).
+      CORS_ALLOW_ORIGIN: ${OPENWEBUI_CORS_ALLOW_ORIGIN:-*}
+      FORWARDED_ALLOW_IPS: ${OPENWEBUI_FORWARDED_ALLOW_IPS:-*}
+
+    extra_hosts:
+      # Allows reaching services on the Docker host from inside the container.
+      - host.docker.internal:host-gateway
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      # Simple port + HTTP response check via Python stdlib (no curl/wget dependency).
+      test:
+        - CMD-SHELL
+        - >-
+          python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/').read()"
+      retries: ${OPENWEBUI_HEALTHCHECK_RETRIES:-5}
+      timeout: ${OPENWEBUI_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${OPENWEBUI_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${OPENWEBUI_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${OPENWEBUI_LOG_MAX_FILE:-3}"
+        max-size: "${OPENWEBUI_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  openwebui-data:
+    # Stores OpenWebUI data at /app/backend/data.
+    name: ${OPENWEBUI_DATA_VOLUME_NAME:-openwebui-data}
+
+networks:
+  openwebui:
+    # Stack-internal network (keeps east-west traffic off `services`).
+    name: ${OPENWEBUI_NETWORK_NAME:-openwebui}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${OPENWEBUI_NETWORK_SUBNET:-172.100.0.0/24}
+          gateway: ${OPENWEBUI_NETWORK_GATEWAY:-172.100.0.1}
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true

@@ -37,8 +37,15 @@ bash scripts/stack.sh validate
 - **portainer**: management UI + socket-proxy (`stacks/portainer`)
 - **zoraxy**: reverse proxy + gateway (`stacks/zoraxy`)
 - **cloudflared**: Cloudflare Tunnel (`stacks/cloudflared`)
-- **sillytavern**: SillyTavern (`stacks/sillytavern`)
 - **authentik**: IdP / SSO (`stacks/authentik`)
+- **openwebui**: OpenWebUI (`stacks/openwebui`)
+- **librechat**: LibreChat (`stacks/librechat`)
+- **lobechat**: LobeChat (server database version) (`stacks/lobechat`)
+- **sillytavern**: SillyTavern (`stacks/sillytavern`)
+- **postgres**: Postgres database (`stacks/postgres`)
+- **mysql**: MySQL database (`stacks/mysql`)
+- **mongodb**: MongoDB database (`stacks/mongodb`)
+- **whodb**: WhoDB database manager UI (`stacks/whodb`)
 
 ## Creating a new stack
 
@@ -65,11 +72,20 @@ Then edit:
 ### Core stack networks (created by stacks)
 
 - `portainer`: internal network created by the Portainer stack
-  - **Subnet**: `172.21.10.0/24`
-  - **Gateway**: `172.21.10.1`
+  - **Subnet**: `172.1.0.0/24`
+  - **Gateway**: `172.1.0.1`
 - `zoraxy`: internal network created by the Zoraxy stack
-  - **Subnet**: `172.21.20.0/24`
-  - **Gateway**: `172.21.20.1`
+  - **Subnet**: `172.2.0.0/24`
+  - **Gateway**: `172.2.0.1`
 - `authentik`: internal network created by the Authentik stack
-  - **Subnet**: `172.21.30.0/24`
-  - **Gateway**: `172.21.30.1`
+  - **Subnet**: `172.3.0.0/24`
+  - **Gateway**: `172.3.0.1`
+- `openwebui`: internal network created by the OpenWebUI stack
+  - **Subnet**: `172.100.0.0/24`
+  - **Gateway**: `172.100.0.1`
+- `librechat`: internal network created by the LibreChat stack
+  - **Subnet**: `172.101.0.0/24`
+  - **Gateway**: `172.101.0.1`
+- `lobechat`: internal network created by the LobeChat stack
+  - **Subnet**: `172.102.0.0/24`
+  - **Gateway**: `172.102.0.1`

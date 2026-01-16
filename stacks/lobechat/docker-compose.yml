@@ -1,0 +1,137 @@
+# LobeChat (server database version)
+#
+# Notes:
+# - This stack does NOT publish the UI on the host by default. Access it via a
+#   reverse proxy / tunnel (e.g. the `zoraxy` or `cloudflared` stacks).
+# - The "server database" version requires a Postgres database with the pgvector
+#   plugin and an authentication provider (NextAuth recommended for Docker).
+#
+# Docs:
+# - Server DB overview: https://lobehub.com/docs/self-hosting/server-database
+# - Docker deployment: https://lobehub.com/docs/self-hosting/server-database/docker
+# - NextAuth + Authentik: https://lobehub.com/docs/self-hosting/advanced/auth/next-auth/authentik
+name: lobechat
+
+services:
+  lobechat-postgres:
+    init: true
+    image: ${LOBECHAT_POSTGRES_IMAGE:-pgvector/pgvector}:${LOBECHAT_POSTGRES_TAG:-pg16}
+    restart: ${LOBECHAT_POSTGRES_RESTART:-always}
+    hostname: ${LOBECHAT_POSTGRES_HOSTNAME:-lobechat-postgres}
+    container_name: ${LOBECHAT_POSTGRES_CONTAINER_NAME:-lobechat-postgres}
+
+    networks:
+      - lobechat
+    volumes:
+      - lobechat-postgres-data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      POSTGRES_DB: ${LOBECHAT_POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${LOBECHAT_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LOBECHAT_POSTGRES_PASSWORD:-replace-me}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d "${LOBECHAT_POSTGRES_DB:-postgres}" -U "${LOBECHAT_POSTGRES_USER:-postgres}"
+      retries: ${LOBECHAT_POSTGRES_HEALTHCHECK_RETRIES:-5}
+      timeout: ${LOBECHAT_POSTGRES_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${LOBECHAT_POSTGRES_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${LOBECHAT_POSTGRES_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LOBECHAT_POSTGRES_LOG_MAX_FILE:-3}"
+        max-size: "${LOBECHAT_POSTGRES_LOG_MAX_SIZE:-10m}"
+
+  lobechat:
+    init: true
+    image: ${LOBECHAT_IMAGE:-lobehub/lobe-chat-database}:${LOBECHAT_TAG:-latest}
+    restart: ${LOBECHAT_RESTART:-always}
+    hostname: ${LOBECHAT_HOSTNAME:-lobechat}
+    container_name: ${LOBECHAT_CONTAINER_NAME:-lobechat}
+
+    depends_on:
+      lobechat-postgres:
+        condition: service_healthy
+
+    networks:
+      - lobechat
+      - services
+
+    expose:
+      # Exposed only to Docker networks (nothing is published on the host).
+      - ${LOBECHAT_PORT:-3210}
+
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      # Required: public/base URL of the deployed site.
+      APP_URL: ${APP_URL:-https://lobechat.example.com}
+
+      # Required: encryption key for sensitive data stored in DB.
+      # Generate: openssl rand -base64 32
+      KEY_VAULTS_SECRET: ${KEY_VAULTS_SECRET:-replace-me}
+
+      # Postgres connection string (pgvector required).
+      DATABASE_URL: postgres://${LOBECHAT_POSTGRES_USER:-postgres}:${LOBECHAT_POSTGRES_PASSWORD:-replace-me}@${LOBECHAT_POSTGRES_HOSTNAME:-lobechat-postgres}:${LOBECHAT_POSTGRES_PORT:-5432}/${LOBECHAT_POSTGRES_DB:-postgres}
+
+      # NextAuth (recommended for Docker deployments of lobe-chat-database)
+      NEXT_AUTH_SECRET: ${NEXT_AUTH_SECRET:-replace-me}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://lobechat.example.com/api/auth}
+      # Optional: comma-separated providers, e.g. "authentik" or "authentik,github"
+      NEXT_AUTH_SSO_PROVIDERS: ${NEXT_AUTH_SSO_PROVIDERS:-authentik}
+
+      # Authentik provider (required if `NEXT_AUTH_SSO_PROVIDERS` includes "authentik")
+      AUTH_AUTHENTIK_ID: ${AUTH_AUTHENTIK_ID:-replace-me}
+      AUTH_AUTHENTIK_SECRET: ${AUTH_AUTHENTIK_SECRET:-replace-me}
+      AUTH_AUTHENTIK_ISSUER: ${AUTH_AUTHENTIK_ISSUER:-https://authentik.example.com/application/o/lobechat/}
+
+      # S3-compatible object storage (recommended for file uploads / multimodal)
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_PUBLIC_DOMAIN: ${S3_PUBLIC_DOMAIN:-}
+
+    healthcheck:
+      # Basic port check using Node's stdlib (no curl/wget dependency).
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const net=require('net');const p=process.env.PORT||3210;
+          const s=net.connect(p,'127.0.0.1');s.on('connect',()=>process.exit(0));
+          s.on('error',()=>process.exit(1));"
+      retries: ${LOBECHAT_HEALTHCHECK_RETRIES:-5}
+      timeout: ${LOBECHAT_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${LOBECHAT_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${LOBECHAT_HEALTHCHECK_START_PERIOD:-30s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${LOBECHAT_LOG_MAX_FILE:-3}"
+        max-size: "${LOBECHAT_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  lobechat-postgres-data:
+    name: ${LOBECHAT_POSTGRES_VOLUME_NAME:-lobechat-postgres-data}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
+  lobechat:
+    # Stack-internal network for Postgres <-> app traffic.
+    name: ${LOBECHAT_NETWORK_NAME:-lobechat}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${LOBECHAT_NETWORK_SUBNET:-172.102.0.0/24}
+          gateway: ${LOBECHAT_NETWORK_GATEWAY:-172.102.0.1}
