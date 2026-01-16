@@ -1,0 +1,57 @@
+# Postgres
+#
+# Notes:
+# - This stack does NOT publish ports on the host by default.
+# - Access it from other stacks via the shared `services` network.
+# - Set POSTGRES_PASSWORD in stacks/postgres/.env before deploying.
+name: postgres
+
+services:
+  postgres:
+    init: true
+    image: ${POSTGRES_IMAGE:-postgres}:${POSTGRES_TAG:-16}
+    restart: ${POSTGRES_RESTART:-always}
+    hostname: ${POSTGRES_HOSTNAME:-postgres}
+    container_name: ${POSTGRES_CONTAINER_NAME:-postgres}
+
+    networks:
+      - services
+    expose:
+      # Postgres default port (internal only).
+      - 5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      TZ: ${POSTGRES_TIMEZONE:-Etc/UTC}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d "${POSTGRES_DB:-postgres}" -U "${POSTGRES_USER:-postgres}"
+      retries: ${POSTGRES_HEALTHCHECK_RETRIES:-5}
+      timeout: ${POSTGRES_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${POSTGRES_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${POSTGRES_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${POSTGRES_LOG_MAX_FILE:-3}"
+        max-size: "${POSTGRES_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  postgres-data:
+    # Stores database data at /var/lib/postgresql/data.
+    name: ${POSTGRES_DATA_VOLUME_NAME:-postgres-data}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true

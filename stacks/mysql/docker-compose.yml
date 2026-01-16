@@ -1,0 +1,59 @@
+# MySQL
+#
+# Notes:
+# - This stack does NOT publish ports on the host by default.
+# - Access it from other stacks via the shared `services` network.
+# - Set MYSQL_ROOT_PASSWORD and MYSQL_PASSWORD in stacks/mysql/.env before deploying.
+name: mysql
+
+services:
+  mysql:
+    init: true
+    image: ${MYSQL_IMAGE:-mysql}:${MYSQL_TAG:-8.4}
+    restart: ${MYSQL_RESTART:-always}
+    hostname: ${MYSQL_HOSTNAME:-mysql}
+    container_name: ${MYSQL_CONTAINER_NAME:-mysql}
+
+    networks:
+      - services
+    expose:
+      # MySQL default port (internal only).
+      - 3306
+    volumes:
+      - mysql-data:/var/lib/mysql
+    security_opt:
+      - no-new-privileges:true
+
+    environment:
+      TZ: ${MYSQL_TIMEZONE:-Etc/UTC}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-app}
+      MYSQL_USER: ${MYSQL_USER:-app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mysqladmin ping -h 127.0.0.1 -u root -p"${MYSQL_ROOT_PASSWORD}" --silent
+      retries: ${MYSQL_HEALTHCHECK_RETRIES:-5}
+      timeout: ${MYSQL_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${MYSQL_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${MYSQL_HEALTHCHECK_START_PERIOD:-20s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${MYSQL_LOG_MAX_FILE:-3}"
+        max-size: "${MYSQL_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  mysql-data:
+    # Stores database data at /var/lib/mysql.
+    name: ${MYSQL_DATA_VOLUME_NAME:-mysql-data}
+
+networks:
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
