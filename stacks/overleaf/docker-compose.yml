@@ -1,0 +1,227 @@
+# Overleaf Community Edition
+#
+# Notes:
+# - This stack does NOT publish host ports by default. Access it via a
+#   reverse proxy / tunnel on the external `services` network.
+# - Mongo runs as a single-node replica set (required). The init container
+#   handles rs.initiate on first deploy.
+# - Persistent data lives at:
+#   - /var/lib/overleaf (app data)
+#   - /data/db (MongoDB)
+#   - /data (Redis)
+name: overleaf
+
+services:
+  overleaf-mongo:
+    init: true
+    image: ${OVERLEAF_MONGO_IMAGE:-mongo}:${OVERLEAF_MONGO_TAG:-6.0}
+    restart: ${OVERLEAF_MONGO_RESTART:-always}
+    hostname: ${OVERLEAF_MONGO_HOSTNAME:-overleaf-mongo}
+    container_name: ${OVERLEAF_MONGO_CONTAINER_NAME:-overleaf-mongo}
+
+    command:
+      - --replSet
+      - ${OVERLEAF_MONGO_REPLICA_SET:-overleaf}
+
+    environment:
+      TZ: ${OVERLEAF_TIMEZONE:-Etc/UTC}
+      MONGO_INITDB_DATABASE: ${OVERLEAF_MONGO_DB:-sharelatex}
+
+    volumes:
+      - overleaf-mongo:/data/db
+
+    networks:
+      - overleaf
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "mongosh --quiet --eval \"quit(db.adminCommand('ping').ok ? 0 : 1)\""
+      retries: ${OVERLEAF_MONGO_HEALTHCHECK_RETRIES:-5}
+      timeout: ${OVERLEAF_MONGO_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${OVERLEAF_MONGO_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${OVERLEAF_MONGO_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${OVERLEAF_MONGO_LOG_MAX_FILE:-3}"
+        max-size: "${OVERLEAF_MONGO_LOG_MAX_SIZE:-10m}"
+
+  overleaf-redis:
+    init: true
+    image: ${OVERLEAF_REDIS_IMAGE:-redis}:${OVERLEAF_REDIS_TAG:-6.2}
+    restart: ${OVERLEAF_REDIS_RESTART:-always}
+    hostname: ${OVERLEAF_REDIS_HOSTNAME:-overleaf-redis}
+    container_name: ${OVERLEAF_REDIS_CONTAINER_NAME:-overleaf-redis}
+
+    command:
+      - redis-server
+      - --save
+      - ${OVERLEAF_REDIS_SAVE_SECONDS:-60}
+      - ${OVERLEAF_REDIS_SAVE_CHANGES:-1}
+      - --loglevel
+      - ${OVERLEAF_REDIS_LOGLEVEL:-warning}
+
+    environment:
+      TZ: ${OVERLEAF_TIMEZONE:-Etc/UTC}
+
+    volumes:
+      - overleaf-redis:/data
+
+    networks:
+      - overleaf
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli ping
+      retries: ${OVERLEAF_REDIS_HEALTHCHECK_RETRIES:-5}
+      timeout: ${OVERLEAF_REDIS_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${OVERLEAF_REDIS_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${OVERLEAF_REDIS_HEALTHCHECK_START_PERIOD:-15s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${OVERLEAF_REDIS_LOG_MAX_FILE:-3}"
+        max-size: "${OVERLEAF_REDIS_LOG_MAX_SIZE:-10m}"
+
+  overleaf-mongo-init:
+    init: true
+    image: ${OVERLEAF_MONGO_IMAGE:-mongo}:${OVERLEAF_MONGO_TAG:-6.0}
+    restart: "no"
+    hostname: ${OVERLEAF_MONGO_INIT_HOSTNAME:-overleaf-mongo-init}
+    container_name: ${OVERLEAF_MONGO_INIT_CONTAINER_NAME:-overleaf-mongo-init}
+
+    depends_on:
+      overleaf-mongo:
+        condition: service_healthy
+
+    networks:
+      - overleaf
+
+    environment:
+      TZ: ${OVERLEAF_TIMEZONE:-Etc/UTC}
+      MONGO_HOST: overleaf-mongo
+      MONGO_PORT: ${OVERLEAF_MONGO_PORT:-27017}
+      MONGO_RS: ${OVERLEAF_MONGO_REPLICA_SET:-overleaf}
+
+    command:
+      - sh
+      - -c
+      - >-
+        mongosh --quiet --host "$${MONGO_HOST}:$${MONGO_PORT}" --eval "rs.status().ok" >/dev/null 2>&1 ||
+        mongosh --quiet --host "$${MONGO_HOST}:$${MONGO_PORT}" --eval "rs.initiate({ _id: '$${MONGO_RS}', members: [{ _id: 0, host: '$${MONGO_HOST}:$${MONGO_PORT}' }] })"
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${OVERLEAF_MONGO_INIT_LOG_MAX_FILE:-1}"
+        max-size: "${OVERLEAF_MONGO_INIT_LOG_MAX_SIZE:-5m}"
+
+  overleaf:
+    init: true
+    image: ${OVERLEAF_IMAGE:-sharelatex/sharelatex}:${OVERLEAF_TAG:-6.1.1}
+    restart: ${OVERLEAF_RESTART:-unless-stopped}
+    hostname: ${OVERLEAF_HOSTNAME:-overleaf}
+    container_name: ${OVERLEAF_CONTAINER_NAME:-overleaf}
+
+    depends_on:
+      overleaf-mongo:
+        condition: service_healthy
+      overleaf-redis:
+        condition: service_healthy
+      overleaf-mongo-init:
+        condition: service_completed_successfully
+
+    networks:
+      - overleaf
+      - services
+
+    expose:
+      # Overleaf listens on port 80 inside the container.
+      - ${OVERLEAF_HTTP_PORT:-80}
+
+    volumes:
+      - overleaf-data:/var/lib/overleaf
+
+    environment:
+      TZ: ${OVERLEAF_TIMEZONE:-Etc/UTC}
+
+      OVERLEAF_APP_NAME: ${OVERLEAF_APP_NAME:-Overleaf Community Edition}
+      OVERLEAF_SITE_URL: ${OVERLEAF_SITE_URL:?set OVERLEAF_SITE_URL in .env}
+
+      OVERLEAF_MONGO_URL: ${OVERLEAF_MONGO_URL:-mongodb://overleaf-mongo:${OVERLEAF_MONGO_PORT:-27017}/${OVERLEAF_MONGO_DB:-sharelatex}?replicaSet=${OVERLEAF_MONGO_REPLICA_SET:-overleaf}}
+      OVERLEAF_REDIS_HOST: ${OVERLEAF_REDIS_HOST:-overleaf-redis}
+      REDIS_HOST: ${OVERLEAF_REDIS_HOST:-overleaf-redis}
+
+      EMAIL_CONFIRMATION_DISABLED: ${OVERLEAF_EMAIL_CONFIRMATION_DISABLED:-true}
+
+      ENABLE_CONVERSIONS: ${OVERLEAF_ENABLE_CONVERSIONS:-true}
+      ENABLED_LINKED_FILE_TYPES: ${OVERLEAF_ENABLED_LINKED_FILE_TYPES:-project_file,project_output_file}
+
+      OVERLEAF_BEHIND_PROXY: ${OVERLEAF_BEHIND_PROXY:-false}
+      OVERLEAF_SECURE_COOKIE: ${OVERLEAF_SECURE_COOKIE:-false}
+      OVERLEAF_TRUSTED_PROXY_IPS: ${OVERLEAF_TRUSTED_PROXY_IPS:-}
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const http=require('http');const req=http.get('http://127.0.0.1:${OVERLEAF_HTTP_PORT:-80}',res=>{process.exit(res.statusCode>=200&&res.statusCode<500?0:1)});req.on('error',()=>process.exit(1));"
+      retries: ${OVERLEAF_HEALTHCHECK_RETRIES:-5}
+      timeout: ${OVERLEAF_HEALTHCHECK_TIMEOUT:-5s}
+      interval: ${OVERLEAF_HEALTHCHECK_INTERVAL:-10s}
+      start_period: ${OVERLEAF_HEALTHCHECK_START_PERIOD:-30s}
+
+    logging:
+      driver: json-file
+      options:
+        max-file: "${OVERLEAF_LOG_MAX_FILE:-3}"
+        max-size: "${OVERLEAF_LOG_MAX_SIZE:-10m}"
+
+volumes:
+  overleaf-data:
+    # App data at /var/lib/overleaf.
+    name: ${OVERLEAF_DATA_VOLUME_NAME:-overleaf-data}
+  overleaf-mongo:
+    # MongoDB persistence.
+    name: ${OVERLEAF_MONGO_VOLUME_NAME:-overleaf-mongo}
+  overleaf-redis:
+    # Redis persistence.
+    name: ${OVERLEAF_REDIS_VOLUME_NAME:-overleaf-redis}
+
+networks:
+  overleaf:
+    # Stack-internal network (keeps east-west traffic off `services`).
+    name: ${OVERLEAF_NETWORK_NAME:-overleaf}
+    internal: true
+    ipam:
+      driver: default
+      config:
+        - subnet: ${OVERLEAF_NETWORK_SUBNET:-172.110.0.0/24}
+          gateway: ${OVERLEAF_NETWORK_GATEWAY:-172.110.0.1}
+  services:
+    # Shared network for inter-stack traffic (external; must be created once).
+    name: ${SERVICES_NETWORK_NAME:-services}
+    external: true
