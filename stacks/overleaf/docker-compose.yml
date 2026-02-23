@@ -122,7 +122,9 @@ services:
       - -c
       - >-
         mongosh --quiet --host "$${MONGO_HOST}:$${MONGO_PORT}" --eval "rs.status().ok" >/dev/null 2>&1 ||
-        mongosh --quiet --host "$${MONGO_HOST}:$${MONGO_PORT}" --eval "rs.initiate({ _id: '$${MONGO_RS}', members: [{ _id: 0, host: '$${MONGO_HOST}:$${MONGO_PORT}' }] })"
+        mongosh --quiet --host "$${MONGO_HOST}:$${MONGO_PORT}" --eval
+        "rs.initiate({ _id: '$${MONGO_RS}', members: [{ _id: 0,
+        host: '$${MONGO_HOST}:$${MONGO_PORT}' }] })"
 
     cap_drop:
       - ALL
@@ -188,7 +190,11 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - node -e "const http=require('http');const req=http.get('http://127.0.0.1:${OVERLEAF_HTTP_PORT:-80}',res=>{process.exit(res.statusCode>=200&&res.statusCode<500?0:1)});req.on('error',()=>process.exit(1));"
+        - >-
+          node -e "const http=require('http');
+          const req=http.get('http://127.0.0.1:${OVERLEAF_HTTP_PORT:-80}',res=>{
+          process.exit(res.statusCode>=200&&res.statusCode<500?0:1)});
+          req.on('error',()=>process.exit(1));"
       retries: ${OVERLEAF_HEALTHCHECK_RETRIES:-5}
       timeout: ${OVERLEAF_HEALTHCHECK_TIMEOUT:-5s}
       interval: ${OVERLEAF_HEALTHCHECK_INTERVAL:-10s}
