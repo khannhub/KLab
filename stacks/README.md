@@ -39,6 +39,7 @@ bash scripts/stack.sh validate
 - **cloudflared**: Cloudflare Tunnel (`stacks/cloudflared`)
 - **authentik**: IdP / SSO (`stacks/authentik`)
 - **openwebui**: OpenWebUI (`stacks/openwebui`)
+- **overleaf**: Overleaf Community Edition (`stacks/overleaf`)
 - **librechat**: LibreChat (`stacks/librechat`)
 - **lobechat**: LobeChat (server database version) (`stacks/lobechat`)
 - **sillytavern**: SillyTavern (`stacks/sillytavern`)
@@ -89,3 +90,6 @@ Then edit:
 - `lobechat`: internal network created by the LobeChat stack
   - **Subnet**: `172.102.0.0/24`
   - **Gateway**: `172.102.0.1`
+- `overleaf`: internal network created by the Overleaf stack
+  - **Subnet**: `172.110.0.0/24`
+  - **Gateway**: `172.110.0.1`
