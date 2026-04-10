@@ -39,6 +39,11 @@ services:
     security_opt:
       - no-new-privileges:true
 
+    command:
+      - node
+      - server.js
+      - --configPath=/home/node/app/config/config.yaml
+
     environment:
       # Container timezone.
       TZ: ${SILLYTAVERN_TIMEZONE:-Etc/UTC}
@@ -158,13 +163,10 @@ services:
       SILLYTAVERN_DEEPL_FORMALITY: ${SILLYTAVERN_DEEPL_FORMALITY:-default}
 
     healthcheck:
-      # Basic port check using Node's stdlib (no curl/wget dependency).
       test:
-        - CMD-SHELL
-        - >-
-          node -e "const net=require('net');const p=process.env.SILLYTAVERN_PORT||8000;
-          const s=net.connect(p,'127.0.0.1');s.on('connect',()=>process.exit(0));
-          s.on('error',()=>process.exit(1));"
+        - CMD
+        - node
+        - src/healthcheck.js
       retries: ${SILLYTAVERN_HEALTHCHECK_RETRIES:-5}
       timeout: ${SILLYTAVERN_HEALTHCHECK_TIMEOUT:-5s}
       interval: ${SILLYTAVERN_HEALTHCHECK_INTERVAL:-10s}
