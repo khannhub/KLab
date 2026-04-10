@@ -7,6 +7,7 @@ services:
   example:
     # Tiny HTTP service used for demo/testing.
     image: ${EXAMPLE_IMAGE:-traefik/whoami}:${EXAMPLE_TAG:-latest}
+    platform: ${EXAMPLE_PLATFORM:-linux/amd64}
     restart: ${EXAMPLE_RESTART:-unless-stopped}
     hostname: ${EXAMPLE_HOSTNAME:-example}
     container_name: ${EXAMPLE_CONTAINER_NAME:-example}
