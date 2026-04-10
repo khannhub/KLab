@@ -49,7 +49,7 @@ jobs:
           : "${CF_ACCESS_CLIENT_SECRET:?missing secret CF_ACCESS_CLIENT_SECRET}"
 
       - name: Start ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
